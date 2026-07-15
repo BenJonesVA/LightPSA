@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens from the LightPSA theme (Claude Design project
+ * 2c0ced40-c7a3-454a-8606-231613c330dd, file LightPSA.dc.html — see plan.md).
+ * Token names are kept identical to the source design file on purpose, so
+ * this block can be diffed against a re-export instead of re-derived.
+ */
+:root {
+  --bg: #f5f6f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f6;
+  --surface-3: #e7ebf1;
+  --border: #e4e8ee;
+  --border-strong: #cfd5df;
+  --grid: #eef1f5;
+  --fg: #111621;
+  --fg-muted: #59616f;
+  --fg-subtle: #8a929e;
+  --accent: #5850ec;
+  --accent-hover: #4740d6;
+  --accent-weak: #edecfd;
+  --accent-fg: #ffffff;
+  --focus: rgba(88, 80, 236, 0.3);
+  --green: #0f7a4f;
+  --green-bg: #e3f4ea;
+  --amber: #946400;
+  --amber-bg: #faf0d6;
+  --orange: #b5470f;
+  --orange-bg: #fbe8db;
+  --red: #c0341d;
+  --red-bg: #fbe5e0;
+  --blue: #1f66d0;
+  --blue-bg: #e5eefb;
+  --violet: #5850ec;
+  --violet-bg: #ecebfd;
+  --slate: #5b6472;
+  --slate-bg: #edf0f4;
+  --shadow: 0 1px 2px rgba(16, 22, 33, 0.06), 0 1px 3px rgba(16, 22, 33, 0.05);
+  --shadow-lg: 0 8px 30px rgba(16, 22, 33, 0.1);
+  --row-py: 9px;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0f16;
+  --surface: #141822;
+  --surface-2: #1a2030;
+  --surface-3: #222a3b;
+  --border: #232b3a;
+  --border-strong: #333d50;
+  --grid: #1a2030;
+  --fg: #e8ebf2;
+  --fg-muted: #98a2b3;
+  --fg-subtle: #6b7688;
+  --accent: #7a72ff;
+  --accent-hover: #8f88ff;
+  --accent-weak: #1e1c38;
+  --accent-fg: #0c0f16;
+  --focus: rgba(122, 114, 255, 0.35);
+  --green: #3ecf8e;
+  --green-bg: #102a20;
+  --amber: #e0b062;
+  --amber-bg: #2a2211;
+  --orange: #f08a5d;
+  --orange-bg: #2b1a12;
+  --red: #f0745e;
+  --red-bg: #2c1613;
+  --blue: #5b9bf3;
+  --blue-bg: #0f1e34;
+  --violet: #8f88ff;
+  --violet-bg: #1c1a33;
+  --slate: #98a2b3;
+  --slate-bg: #1b2230;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-density="compact"] {
+  --row-py: 5px;
+}
+[data-density="spacious"] {
+  --row-py: 14px;
+}
+
+::selection {
+  background: var(--accent-weak);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  transition:
+    background 0.2s,
+    color 0.2s;
+}

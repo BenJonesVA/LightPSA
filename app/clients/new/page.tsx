@@ -1,0 +1,62 @@
+import { UserRole } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/rbac";
+import { createClient } from "../actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
+export default async function NewClientPage() {
+  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const clients = await prisma.client.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
+  return (
+    <div className="mx-auto max-w-xl">
+      <h1 className="text-[24px] font-bold tracking-tight text-fg">New client</h1>
+
+      <Card className="mt-6 p-6">
+        <form action={createClient} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-fg-muted">Name</label>
+            <input
+              name="name"
+              required
+              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-fg-muted">Billing address</label>
+            <textarea
+              name="billingAddress"
+              rows={3}
+              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-fg-muted">Parent company (optional)</label>
+            <select
+              name="parentId"
+              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
+            >
+              <option value="">— None —</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button type="submit" variant="primary">
+            Create client
+          </Button>
+        </form>
+      </Card>
+    </div>
+  );
+}

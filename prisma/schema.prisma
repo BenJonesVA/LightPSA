@@ -1,0 +1,508 @@
+// ─────────────────────────────────────────────────────────────
+// PSA / Ticketing System — Phase 1 Schema
+// Core Ticketing (Boards, Tickets), CRM (Clients, Contacts),
+// Time-Keeping (TimeLog, Expense), and Contracts.
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  TECHNICIAN
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CLIENT
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  EMERGENCY
+}
+
+enum TicketSource {
+  EMAIL
+  PORTAL
+  MANUAL
+  PHONE
+}
+
+enum WorkType {
+  REMOTE
+  ONSITE
+  ADMIN
+  PROJECT
+}
+
+enum ExpenseType {
+  MILEAGE
+  MATERIAL
+  OTHER
+}
+
+enum ContractType {
+  RETAINER
+  MSP_FLAT_RATE
+  TIME_AND_MATERIALS
+}
+
+enum FlatRateUnit {
+  PER_DEVICE
+  PER_USER
+}
+
+enum AssetType {
+  WORKSTATION
+  LAPTOP
+  SERVER
+  NETWORK_DEVICE
+  PRINTER
+  MOBILE_DEVICE
+  OTHER
+}
+
+enum AutomationTrigger {
+  TICKET_CREATED
+  STATUS_CHANGED
+  PRIORITY_ESCALATED
+  IDLE_TIME_EXCEEDED
+}
+
+enum AutomationAction {
+  ASSIGN_TECHNICIAN
+  SEND_EMAIL_NOTIFICATION
+  CHANGE_STATUS
+  CHANGE_PRIORITY
+}
+
+// ── Internal Users (Technicians / Admins) ─────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  title        String?
+  role         UserRole @default(TECHNICIAN)
+  passwordHash String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  boardMemberships BoardMember[]
+  assignedTickets  Ticket[]        @relation("TicketAssignee")
+  comments         TicketComment[] @relation("CommentAuthorUser")
+  timeLogs         TimeLog[]
+  expenses         Expense[]
+  cannedResponses  CannedResponse[]
+  kbArticles       KbArticle[]
+  automationAssignments AutomationRule[] @relation("AutomationActionAssignee")
+
+  @@index([role])
+}
+
+// ── CRM Light: Clients (Companies) & Contacts ─────────────
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Client?  @relation("ClientHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Client[] @relation("ClientHierarchy")
+
+  billingAddress String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  contacts  Contact[]
+  tickets   Ticket[]
+  contracts Contract[]
+  assets    Asset[]
+  automationConditions AutomationRule[] @relation("AutomationConditionClient")
+
+  @@index([parentId])
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  title        String?
+  isPrimary    Boolean  @default(false)
+  isBilling    Boolean  @default(false)
+  portalAccess Boolean  @default(false)
+  passwordHash String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  submittedTickets Ticket[]        @relation("TicketSubmitter")
+  comments         TicketComment[] @relation("CommentAuthorContact")
+
+  @@index([clientId])
+}
+
+// ── Boards & Board Membership (RBAC scoping) ──────────────
+
+model Board {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  tickets         Ticket[]
+  members         BoardMember[]
+  cannedResponses CannedResponse[]
+  kbArticles      KbArticle[]
+  automationConditions AutomationRule[] @relation("AutomationConditionBoard")
+}
+
+model BoardMember {
+  id       String @id @default(cuid())
+  boardId  String
+  userId   String
+  board    Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([userId])
+}
+
+// ── Ticket Taxonomy ────────────────────────────────────────
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+
+  tickets    Ticket[]
+  kbArticles KbArticle[]
+
+  @@index([parentId])
+}
+
+model KbArticle {
+  id         String  @id @default(cuid())
+  title      String
+  body       String  @db.Text
+  isInternal Boolean @default(false) // hidden from the client portal — same flag semantics as TicketComment.isInternal
+
+  boardId    String?
+  board      Board?    @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([boardId])
+  @@index([categoryId])
+  @@index([isInternal])
+}
+
+model CannedResponse {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @db.Text
+  boardId   String?
+  board     Board?   @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User    @relation(fields: [createdById], references: [id])
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([boardId])
+  @@index([createdById])
+}
+
+// ── Tickets ────────────────────────────────────────────────
+
+model Ticket {
+  id          Int            @id @default(autoincrement()) // display as e.g. TKT-{id}
+  title       String
+  description String         @db.Text
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  source      TicketSource   @default(MANUAL)
+
+  boardId     String
+  board       Board          @relation(fields: [boardId], references: [id])
+
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id])
+
+  contactId   String?
+  contact     Contact?       @relation("TicketSubmitter", fields: [contactId], references: [id], onDelete: SetNull)
+
+  assigneeId  String?
+  assignee    User?          @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  categoryId  String?
+  category    Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
+  resolvedAt  DateTime?      @db.Timestamptz(3)
+  closedAt    DateTime?      @db.Timestamptz(3)
+
+  comments     TicketComment[]
+  timeLogs     TimeLog[]
+  expenses     Expense[]
+  csatResponse CsatResponse?
+
+  @@index([boardId, status])
+  @@index([clientId])
+  @@index([assigneeId])
+  @@index([categoryId])
+  @@index([status, priority])
+}
+
+model TicketComment {
+  id              String   @id @default(cuid())
+  ticketId        Int
+  ticket          Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  authorUserId    String?
+  authorUser      User?    @relation("CommentAuthorUser", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  authorContactId String?
+  authorContact   Contact? @relation("CommentAuthorContact", fields: [authorContactId], references: [id], onDelete: SetNull)
+
+  body       String   @db.Text
+  isInternal Boolean  @default(false) // internal notes are hidden from the client portal
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId])
+}
+
+// ── Time-Keeping ───────────────────────────────────────────
+
+model TimeLog {
+  id              String    @id @default(cuid())
+  ticketId        Int
+  ticket          Ticket    @relation(fields: [ticketId], references: [id])
+
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+
+  contractId      String?
+  contract        Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  startTime       DateTime  @db.Timestamptz(3)
+  endTime         DateTime? @db.Timestamptz(3)
+  durationMinutes Int
+  billable        Boolean   @default(true)
+  workType        WorkType  @default(REMOTE)
+  notesInternal   String?   @db.Text
+  notesExternal   String?   @db.Text
+
+  isApproved      Boolean   @default(false)
+  isLocked        Boolean   @default(false) // locked once pulled into an invoice batch
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([contractId])
+  @@index([isApproved, isLocked])
+}
+
+model Expense {
+  id            String      @id @default(cuid())
+  ticketId      Int
+  ticket        Ticket      @relation(fields: [ticketId], references: [id])
+
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  type          ExpenseType
+  description   String
+  amount        Decimal     @db.Decimal(10, 2)
+  miles         Decimal?    @db.Decimal(6, 2)
+  billable      Boolean     @default(true)
+  isApproved    Boolean     @default(false)
+  isLocked      Boolean     @default(false)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([isApproved, isLocked])
+}
+
+// ── Contracts / Billing ────────────────────────────────────
+
+model Contract {
+  id        String       @id @default(cuid())
+  clientId  String
+  client    Client       @relation(fields: [clientId], references: [id])
+
+  name      String
+  type      ContractType
+  startDate DateTime     @db.Timestamptz(3)
+  endDate   DateTime?    @db.Timestamptz(3)
+  isActive  Boolean      @default(true)
+
+  // RETAINER fields
+  blockHoursPerPeriod Decimal? @db.Decimal(6, 2)
+  rolloverHours       Boolean  @default(false)
+
+  // MSP_FLAT_RATE fields
+  flatRateAmount Decimal?      @db.Decimal(10, 2)
+  flatRateUnit   FlatRateUnit?
+  unitCount      Int?
+
+  // TIME_AND_MATERIALS fields
+  defaultHourlyRate Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  rates    ContractRate[]
+  timeLogs TimeLog[]
+
+  @@index([clientId])
+  @@index([type, isActive])
+}
+
+// Per-role/work-type rate overrides for Time & Materials contracts
+model ContractRate {
+  id          String    @id @default(cuid())
+  contractId  String
+  contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  role        UserRole?
+  workType    WorkType?
+  hourlyRate  Decimal   @db.Decimal(10, 2)
+
+  @@index([contractId])
+}
+
+// ── Assets / mini-CMDB ─────────────────────────────────────
+
+model Asset {
+  id           String    @id @default(cuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  type         AssetType
+  name         String
+  serialNumber String?
+  notes        String?   @db.Text
+  isActive     Boolean   @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  ticketAssets TicketAsset[]
+
+  @@index([clientId])
+}
+
+// Join table for per-ticket asset association — a ticket can reference
+// several assets (e.g. "server + the switch it's plugged into"), and an
+// asset can show up across many tickets over its lifetime.
+model TicketAsset {
+  id       String @id @default(cuid())
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assetId  String
+  asset    Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([ticketId, assetId])
+  @@index([assetId])
+}
+
+// ── SLA Engine ─────────────────────────────────────────────
+
+// One policy per priority level: response/resolution targets in minutes.
+model SlaPolicy {
+  id                      String         @id @default(cuid())
+  priority                TicketPriority @unique
+  responseTargetMinutes   Int
+  resolutionTargetMinutes Int
+  isActive                Boolean        @default(true)
+  createdAt               DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime       @updatedAt @db.Timestamptz(3)
+}
+
+// ── CSAT Survey ────────────────────────────────────────────
+
+// One row per ticket, created the moment a ticket closes. `id` doubles as the
+// unguessable public survey link token (/csat/{id}) — no separate token
+// column needed, same reasoning as every other cuid PK in this schema that's
+// exposed externally (Contact, portal ticket ids, etc).
+model CsatResponse {
+  id       String @id @default(cuid())
+  ticketId Int    @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  rating  Int?
+  comment String? @db.Text
+
+  sentAt      DateTime? @db.Timestamptz(3)
+  respondedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+}
+
+// ── Automation Engine (IFTTT-style rules) ─────────────────
+
+model AutomationRule {
+  id          String            @id @default(cuid())
+  name        String
+  triggerType AutomationTrigger
+  isActive    Boolean           @default(true)
+
+  // Conditions (all optional — an unset condition matches any value)
+  conditionBoardId  String?
+  conditionBoard    Board?          @relation("AutomationConditionBoard", fields: [conditionBoardId], references: [id], onDelete: SetNull)
+  conditionPriority TicketPriority?
+  conditionClientId String?
+  conditionClient   Client?         @relation("AutomationConditionClient", fields: [conditionClientId], references: [id], onDelete: SetNull)
+  // Only meaningful for triggerType IDLE_TIME_EXCEEDED — minutes since Ticket.updatedAt
+  // before the rule is considered a match. Required by app-level validation for that
+  // trigger type only; the column stays nullable since it's meaningless for the others.
+  conditionIdleMinutes Int?
+
+  // Action (exactly one actionType; only the matching action* fields are used)
+  actionType       AutomationAction
+  actionAssigneeId String?
+  actionAssignee   User?            @relation("AutomationActionAssignee", fields: [actionAssigneeId], references: [id], onDelete: SetNull)
+  actionStatus     TicketStatus?
+  actionPriority   TicketPriority?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([triggerType, isActive])
+}

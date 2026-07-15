@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: psa
+      POSTGRES_PASSWORD: psa
+      POSTGRES_DB: psa
+    ports:
+      - "5432:5432"
+    volumes:
+      - psa_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  # Runs once, applies any pending migrations, then exits. Reuses the
+  # `builder` stage (which still has the full Prisma CLI + migrations
+  # folder) so the `app` image itself can stay lean and not carry Prisma's
+  # CLI/migration-engine binaries. `app` waits for this to succeed before
+  # starting — fine for a single-instance setup like this one; a multi
+  # -replica deployment would want migrations run as a separate release
+  # step instead, to avoid every replica racing to migrate at once.
+  migrate:
+    build:
+      context: .
+      target: builder
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://psa:psa@postgres:5432/psa?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://psa:psa@postgres:5432/psa?schema=public
+    ports:
+      - "3131:3131"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  psa_postgres_data:
