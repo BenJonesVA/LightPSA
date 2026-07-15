@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSlaStatus } from "@/lib/sla";
+import { requireStaff } from "@/lib/rbac";
 import { Card, CardHeader } from "@/components/ui/card";
 
 const OPEN_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_ON_CLIENT"] as const;
 
 export default async function DashboardPage() {
+  // Every other staff page calls this; the dashboard didn't, which meant it
+  // was relying solely on middleware's coarse check — no isActive
+  // re-validation, so a deactivated staff account's still-valid-signature
+  // session could keep viewing this page indefinitely.
+  await requireStaff();
+
   const [openTicketCount, activeClientCount, boards, policies, openTickets] = await Promise.all([
     prisma.ticket.count({ where: { status: { in: [...OPEN_STATUSES] } } }),
     prisma.client.count({ where: { isActive: true } }),

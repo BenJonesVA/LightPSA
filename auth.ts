@@ -6,6 +6,44 @@ import { prisma } from "@/lib/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // authConfig's jwt() (Edge-safe, no Prisma) only runs the branch that
+    // stamps claims onto a *fresh* token at sign-in. This Node-only override
+    // adds the other half: on every subsequent request, confirm the
+    // underlying User/Contact row still exists and is still allowed to log
+    // in. Without this, a token signed before a DB reset/reseed (this
+    // project's dev DB has already been reset at least once) — or a
+    // since-deactivated account — keeps looking "valid" (the signature still
+    // checks out) right up until the first write that trusts
+    // session.user.id as a foreign key, which then 500s with a raw Prisma
+    // constraint violation instead of bouncing the user back to /login.
+    // Returning null here ends the session cleanly.
+    async jwt({ token, user }) {
+      if (user) {
+        token.actorType = user.actorType;
+        token.role = user.role;
+        token.clientId = user.clientId;
+        return token;
+      }
+
+      if (token.actorType === "STAFF") {
+        const stillValid = await prisma.user.findUnique({
+          where: { id: token.sub! },
+          select: { isActive: true },
+        });
+        if (!stillValid?.isActive) return null;
+      } else if (token.actorType === "CLIENT") {
+        const stillValid = await prisma.contact.findUnique({
+          where: { id: token.sub! },
+          select: { isActive: true, portalAccess: true },
+        });
+        if (!stillValid?.isActive || !stillValid.portalAccess) return null;
+      }
+
+      return token;
+    },
+  },
   providers: [
     Credentials({
       id: "staff-login",

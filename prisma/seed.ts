@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, TicketStatus, TicketPriority, TicketSource, WorkType, ExpenseType, ContractType, FlatRateUnit } from "@prisma/client";
+import { PrismaClient, UserRole, TicketStatus, TicketPriority, TicketSource, WorkType, ExpenseType, ContractType, FlatRateUnit, AssetType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -214,6 +214,53 @@ async function main() {
     ],
   });
 
+  // ── Assets ───────────────────────────────────────────────
+  const [acmeServer, acmeFirewall, brightPathWorkstation] = await Promise.all([
+    prisma.asset.create({
+      data: { clientId: acme.id, type: AssetType.SERVER, name: "ACME-FS01 (File Server)", serialNumber: "SN-88213" },
+    }),
+    prisma.asset.create({
+      data: { clientId: acme.id, type: AssetType.NETWORK_DEVICE, name: "Acme HQ Firewall", serialNumber: "SN-77102" },
+    }),
+    prisma.asset.create({
+      data: { clientId: brightPath.id, type: AssetType.WORKSTATION, name: "Front Desk PC", serialNumber: "SN-55901" },
+    }),
+  ]);
+
+  await prisma.ticketAsset.createMany({
+    data: [
+      { ticketId: tickets[0].id, assetId: acmeFirewall.id }, // "VPN drops intermittently for remote staff"
+      { ticketId: tickets[5].id, assetId: acmeServer.id }, // "Server room AC alarm — investigate"
+      { ticketId: tickets[8].id, assetId: brightPathWorkstation.id }, // "Password reset — locked out of email"
+    ],
+  });
+
+  // ── Scheduled Visits ─────────────────────────────────────
+  // Relative to seed-run time, not fixed 2025 dates like TimeLogs — a
+  // scheduled visit is forward-looking, so a freshly seeded DB should show
+  // something in the current/next week no matter when seed runs.
+  const seedNow = new Date();
+  const addHours = (base: Date, hours: number) => new Date(base.getTime() + hours * 60 * 60 * 1000);
+
+  await prisma.scheduledVisit.createMany({
+    data: [
+      {
+        ticketId: tickets[5].id, // "Server room AC alarm — investigate"
+        technicianId: techAlice.id,
+        startTime: addHours(seedNow, 4),
+        endTime: addHours(seedNow, 5),
+        location: "Acme Corp — Server Room",
+      },
+      {
+        ticketId: tickets[6].id, // "Install new network switch — Downtown Branch"
+        technicianId: techBen.id,
+        startTime: addHours(seedNow, 26),
+        endTime: addHours(seedNow, 28),
+        location: "Acme Downtown Branch",
+      },
+    ],
+  });
+
   // ── Canned Responses ───────────────────────────────────
   await prisma.cannedResponse.createMany({
     data: [
@@ -302,7 +349,7 @@ async function main() {
   console.log("Seed complete:");
   console.log("  Users: 4, Boards: 4, Categories: 9 (3 parent + 6 sub)");
   console.log("  Clients: 4 (incl. 1 parent/child pair), Contacts: 9, Contracts: 3 (+1 ContractRate)");
-  console.log(`  Tickets: ${tickets.length}, TicketComments: 5, TimeLogs: 4, Expenses: 2, CannedResponses: 2, KbArticles: 3`);
+  console.log(`  Tickets: ${tickets.length}, TicketComments: 5, TimeLogs: 4, Expenses: 2, CannedResponses: 2, KbArticles: 3, Assets: 3 (+3 TicketAsset links), ScheduledVisits: 2`);
   console.log("  SlaPolicies: 4 (one per priority), AutomationRules: 3 (incl. 1 idle-time)");
   console.log(`  Dev login password for all seeded accounts: "${DEV_PASSWORD}"`);
   console.log("  Staff: priya.admin@ourmsp.com / marcus.manager@ourmsp.com / alice.tech@ourmsp.com / ben.tech@ourmsp.com");

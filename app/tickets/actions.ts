@@ -177,3 +177,28 @@ export async function logExpense(ticketId: number, formData: FormData) {
 
   revalidatePath(`/tickets/${ticketId}`);
 }
+
+export async function linkAsset(ticketId: number, formData: FormData) {
+  await requireStaff();
+
+  const assetId = String(formData.get("assetId") ?? "");
+  if (!assetId) return;
+
+  // upsert, not create — resubmitting the same link (e.g. a double-click)
+  // is a no-op rather than a unique-constraint error.
+  await prisma.ticketAsset.upsert({
+    where: { ticketId_assetId: { ticketId, assetId } },
+    update: {},
+    create: { ticketId, assetId },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function unlinkAsset(ticketId: number, assetId: string) {
+  await requireStaff();
+
+  await prisma.ticketAsset.deleteMany({ where: { ticketId, assetId } });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}

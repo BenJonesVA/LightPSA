@@ -1,6 +1,6 @@
 "use server";
 
-import { UserRole } from "@prisma/client";
+import { UserRole, AssetType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -53,6 +53,25 @@ export async function createContact(clientId: string, formData: FormData) {
       isBilling,
       portalAccess,
     },
+  });
+
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function createAsset(clientId: string, formData: FormData) {
+  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "") as AssetType;
+  const serialNumber = String(formData.get("serialNumber") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!name || !type) {
+    throw new Error("Asset name and type are required");
+  }
+
+  await prisma.asset.create({
+    data: { clientId, name, type, serialNumber, notes },
   });
 
   revalidatePath(`/clients/${clientId}`);

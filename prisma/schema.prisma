@@ -111,6 +111,7 @@ model User {
   expenses         Expense[]
   cannedResponses  CannedResponse[]
   kbArticles       KbArticle[]
+  scheduledVisits  ScheduledVisit[] @relation("ScheduledVisitTechnician")
   automationAssignments AutomationRule[] @relation("AutomationActionAssignee")
 
   @@index([role])
@@ -273,10 +274,12 @@ model Ticket {
   resolvedAt  DateTime?      @db.Timestamptz(3)
   closedAt    DateTime?      @db.Timestamptz(3)
 
-  comments     TicketComment[]
-  timeLogs     TimeLog[]
-  expenses     Expense[]
-  csatResponse CsatResponse?
+  comments        TicketComment[]
+  timeLogs        TimeLog[]
+  expenses        Expense[]
+  csatResponse    CsatResponse?
+  ticketAssets    TicketAsset[]
+  scheduledVisits ScheduledVisit[]
 
   @@index([boardId, status])
   @@index([clientId])
@@ -441,6 +444,30 @@ model TicketAsset {
 
   @@unique([ticketId, assetId])
   @@index([assetId])
+}
+
+// ── Dispatch / Scheduling ──────────────────────────────────
+
+// A booked site visit or remote appointment for a technician against a
+// ticket. No isCancelled flag — a schedule slot is inherently transient
+// (constantly rebooked/moved), and nothing else references a visit the way
+// TimeLog/Expense feed billing, so a cancel is just a delete.
+model ScheduledVisit {
+  id           String @id @default(cuid())
+  ticketId     Int
+  ticket       Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   User   @relation("ScheduledVisitTechnician", fields: [technicianId], references: [id], onDelete: Cascade)
+
+  startTime DateTime @db.Timestamptz(3)
+  endTime   DateTime @db.Timestamptz(3)
+  location  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([technicianId, startTime])
+  @@index([ticketId])
 }
 
 // ── SLA Engine ─────────────────────────────────────────────

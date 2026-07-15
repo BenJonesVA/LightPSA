@@ -3,7 +3,15 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import type { TicketPriority, TicketStatus } from "@prisma/client";
-import { addComment, updateTicketStatus, updateTicketPriority, logTime, logExpense } from "../actions";
+import {
+  addComment,
+  updateTicketStatus,
+  updateTicketPriority,
+  logTime,
+  logExpense,
+  linkAsset,
+  unlinkAsset,
+} from "../actions";
 import { getSlaStatus } from "@/lib/sla";
 import { CannedResponsePicker } from "./canned-response-picker";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
@@ -46,18 +54,27 @@ export default async function TicketDetailPage({
       timeLogs: true,
       expenses: true,
       csatResponse: true,
+      ticketAssets: { include: { asset: true }, orderBy: { createdAt: "asc" } },
+      scheduledVisits: { include: { technician: { select: { name: true } } }, orderBy: { startTime: "asc" } },
     },
   });
 
   if (!ticket) notFound();
 
-  const [slaPolicy, cannedResponses] = await Promise.all([
+  const [slaPolicy, cannedResponses, clientAssets] = await Promise.all([
     prisma.slaPolicy.findUnique({ where: { priority: ticket.priority } }),
     prisma.cannedResponse.findMany({
       where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
       select: { id: true, title: true, body: true },
     }),
+    prisma.asset.findMany({
+      where: { clientId: ticket.clientId, isActive: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const linkedAssetIds = new Set(ticket.ticketAssets.map((ta) => ta.assetId));
+  const linkableAssets = clientAssets.filter((asset) => !linkedAssetIds.has(asset.id));
 
   const sla =
     slaPolicy && slaPolicy.isActive && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED"
@@ -88,6 +105,11 @@ export default async function TicketDetailPage({
   async function submitExpense(formData: FormData) {
     "use server";
     await logExpense(ticketId, formData);
+  }
+
+  async function submitLinkAsset(formData: FormData) {
+    "use server";
+    await linkAsset(ticketId, formData);
   }
 
   return (
@@ -413,6 +435,87 @@ export default async function TicketDetailPage({
                 Update
               </Button>
             </form>
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Assets
+            </div>
+            {ticket.ticketAssets.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No assets linked yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {ticket.ticketAssets.map((ta) => (
+                  <li key={ta.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-fg">{ta.asset.name}</div>
+                      <div className="text-[11px] text-fg-subtle">
+                        {ta.asset.type.replace(/_/g, " ")}
+                        {ta.asset.serialNumber ? ` · ${ta.asset.serialNumber}` : ""}
+                      </div>
+                    </div>
+                    <form action={unlinkAsset.bind(null, ticketId, ta.assetId)}>
+                      <Button type="submit" variant="ghost" size="sm">
+                        Unlink
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {linkableAssets.length > 0 && (
+              <form action={submitLinkAsset} className="mt-3 flex items-end gap-2 border-t border-border pt-3">
+                <select
+                  name="assetId"
+                  required
+                  className="flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                >
+                  <option value="">Link an asset…</option>
+                  {linkableAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.name} ({asset.type.replace(/_/g, " ")})
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" variant="secondary" size="sm">
+                  Link
+                </Button>
+              </form>
+            )}
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+                Scheduled visits
+              </div>
+              <a href={`/schedule/new?ticketId=${ticket.id}`} className="text-[11.5px] font-medium text-accent hover:underline">
+                + Schedule
+              </a>
+            </div>
+            {ticket.scheduledVisits.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No visits scheduled.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {ticket.scheduledVisits.map((visit) => (
+                  <li key={visit.id} className="text-[12.5px]">
+                    <div className="font-medium text-fg">
+                      {visit.startTime.toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                    <div className="text-[11px] text-fg-subtle">
+                      {visit.technician.name}
+                      {visit.location ? ` · ${visit.location}` : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           {ticket.csatResponse && (

@@ -4,12 +4,22 @@ import { ContractType, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
-import { createContact } from "../actions";
+import { createContact, createAsset } from "../actions";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 
 const PERIOD_DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+
+const ASSET_TYPE_OPTIONS = [
+  "WORKSTATION",
+  "LAPTOP",
+  "SERVER",
+  "NETWORK_DEVICE",
+  "PRINTER",
+  "MOBILE_DEVICE",
+  "OTHER",
+] as const;
 
 const CONTRACT_TYPE_STYLES: Record<string, { fg: string; bg: string }> = {
   RETAINER: { fg: "text-blue", bg: "bg-blue-bg" },
@@ -33,6 +43,7 @@ export default async function ClientDetailPage({
       parent: { select: { id: true, name: true } },
       contacts: { orderBy: { createdAt: "asc" } },
       contracts: { orderBy: { createdAt: "desc" } },
+      assets: { orderBy: { createdAt: "asc" } },
       tickets: {
         orderBy: { createdAt: "desc" },
         take: 10,
@@ -79,6 +90,7 @@ export default async function ClientDetailPage({
   );
 
   const createContactForClient = createContact.bind(null, client.id);
+  const createAssetForClient = createAsset.bind(null, client.id);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -293,6 +305,78 @@ export default async function ClientDetailPage({
             )}
           </tbody>
         </table>
+      </Card>
+
+      {/* Assets */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-[13.5px] font-semibold text-fg">Assets</h2>
+        </CardHeader>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              <th className="px-4 py-2.5">Name</th>
+              <th className="px-4 py-2.5">Type</th>
+              <th className="px-4 py-2.5">Serial</th>
+              <th className="px-4 py-2.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {client.assets.map((asset) => (
+              <tr key={asset.id} className="border-b border-grid last:border-0">
+                <td className="px-4 py-row-py font-medium text-fg">{asset.name}</td>
+                <td className="px-4 py-row-py text-fg-muted">{asset.type.replace(/_/g, " ")}</td>
+                <td className="px-4 py-row-py font-mono text-fg-muted">{asset.serialNumber ?? "—"}</td>
+                <td className="px-4 py-row-py text-fg-muted">{asset.isActive ? "Active" : "Inactive"}</td>
+              </tr>
+            ))}
+            {client.assets.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-fg-subtle">
+                  No assets on file yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {canManage && (
+          <form
+            action={createAssetForClient}
+            className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-4"
+          >
+            <input
+              name="name"
+              placeholder="Name (e.g. Front desk PC)"
+              required
+              className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-2"
+            />
+            <select
+              name="type"
+              defaultValue="WORKSTATION"
+              className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
+            >
+              {ASSET_TYPE_OPTIONS.map((type) => (
+                <option key={type} value={type}>
+                  {type.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+            <input
+              name="serialNumber"
+              placeholder="Serial number"
+              className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
+            />
+            <input
+              name="notes"
+              placeholder="Notes (optional)"
+              className="col-span-2 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-3"
+            />
+            <Button type="submit" variant="primary" className="col-span-1">
+              Add asset
+            </Button>
+          </form>
+        )}
       </Card>
 
       {/* Recent Tickets */}

@@ -9,6 +9,7 @@ const WORKSPACE_LINKS = [
   { href: "/boards", label: "Boards" },
   { href: "/clients", label: "Clients" },
   { href: "/kb", label: "Knowledge Base" },
+  { href: "/schedule", label: "Schedule" },
 ];
 
 const MANAGE_LINKS = [
