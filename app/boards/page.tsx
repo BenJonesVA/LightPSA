@@ -52,6 +52,7 @@ export default async function BoardsPage() {
                 <th className="px-4 py-2.5">Description</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5">Open tickets</th>
+                {canCreateBoard && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
             <tbody>
@@ -74,6 +75,13 @@ export default async function BoardsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-row-py font-mono text-fg-muted">{openCounts[i]}</td>
+                  {canCreateBoard && (
+                    <td className="px-4 py-row-py text-right">
+                      <Link href={`/boards/${board.id}`} className="text-fg-subtle hover:text-accent">
+                        Edit
+                      </Link>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

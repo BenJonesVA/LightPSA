@@ -13,10 +13,16 @@ export default async function NewScheduledVisitPage({
 }) {
   await requireStaff();
   const { ticketId } = await searchParams;
+  const preselectedId = ticketId && Number.isInteger(Number(ticketId)) ? Number(ticketId) : null;
 
   const [tickets, technicians] = await Promise.all([
     prisma.ticket.findMany({
-      where: { status: { in: [...OPEN_STATUSES] } },
+      // Always include the ticket linked in from the ticket-detail page's
+      // "+ Schedule" button, even if it's RESOLVED/CLOSED — otherwise it's
+      // silently absent from the list and defaultValue has nothing to select.
+      where: {
+        OR: [{ status: { in: [...OPEN_STATUSES] } }, ...(preselectedId ? [{ id: preselectedId }] : [])],
+      },
       include: { client: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     }),

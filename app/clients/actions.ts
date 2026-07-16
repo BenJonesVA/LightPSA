@@ -1,10 +1,11 @@
 "use server";
 
-import { UserRole, AssetType } from "@prisma/client";
+import { Prisma, UserRole, AssetType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
+import type { DeleteActionState } from "@/components/ui/delete-button";
 
 export async function createClient(formData: FormData) {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
@@ -23,6 +24,48 @@ export async function createClient(formData: FormData) {
   });
 
   redirect(`/clients/${client.id}`);
+}
+
+export async function updateClient(id: string, formData: FormData) {
+  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const name = String(formData.get("name") ?? "").trim();
+  const billingAddress = String(formData.get("billingAddress") ?? "").trim() || null;
+  const isActive = formData.get("isActive") === "on";
+
+  if (!name) {
+    throw new Error("Client name is required");
+  }
+
+  await prisma.client.update({
+    where: { id },
+    data: { name, billingAddress, isActive },
+  });
+
+  revalidatePath("/clients");
+  revalidatePath(`/clients/${id}`);
+}
+
+// Returns { error } instead of throwing for the expected/guarded failure —
+// a thrown Error's message gets redacted by Next.js in production builds
+// (components/ui/delete-button.tsx explains why), which would otherwise turn
+// this into a blank crash screen instead of the message below.
+export async function deleteClient(id: string, _prevState: DeleteActionState, _formData: FormData): Promise<DeleteActionState> {
+  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  try {
+    await prisma.client.delete({ where: { id } });
+  } catch (error) {
+    // Ticket.clientId and Contract.clientId are required FKs with no
+    // onDelete set (RESTRICT), so either one existing blocks the delete.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return { error: "Cannot delete a client with existing tickets or contracts — deactivate it instead." };
+    }
+    throw error;
+  }
+
+  revalidatePath("/clients");
+  redirect("/clients");
 }
 
 export async function createContact(clientId: string, formData: FormData) {

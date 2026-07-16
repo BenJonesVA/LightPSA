@@ -101,6 +101,11 @@ export default async function NewTicketPage() {
             </div>
           </div>
 
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
+            <input type="checkbox" name="expensesEnabled" className="rounded border-border-strong accent-accent" />
+            Track expenses for this ticket
+          </label>
+
           <Button type="submit" variant="primary">
             Create ticket
           </Button>

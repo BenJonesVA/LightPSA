@@ -255,6 +255,10 @@ model Ticket {
   status      TicketStatus   @default(OPEN)
   priority    TicketPriority @default(MEDIUM)
   source      TicketSource   @default(MANUAL)
+  // Opt-in per ticket — not every ticket needs expense tracking, so the
+  // Expenses card on the detail page stays hidden until this is checked (or
+  // the ticket already has logged expenses, see app/tickets/[id]/page.tsx).
+  expensesEnabled Boolean    @default(false)
 
   boardId     String
   board       Board          @relation(fields: [boardId], references: [id])
@@ -528,6 +532,19 @@ model CsatResponse {
   sentAt      DateTime? @db.Timestamptz(3)
   respondedAt DateTime? @db.Timestamptz(3)
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+}
+
+// ── Org-wide Settings ──────────────────────────────────────
+
+// Singleton row (fixed id) holding org-wide branding. lib/settings.ts always
+// upserts on this fixed id, so the row self-heals on first read — no seed
+// step required.
+model Setting {
+  id           String   @id @default("singleton")
+  companyName  String   @default("LightPSA")
+  tagline      String?
+  logoMimeType String?
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 }
 
 // ── Automation Engine (IFTTT-style rules) ─────────────────

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { getSettings } from "@/lib/settings";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DensityToggle } from "@/components/density-toggle";
@@ -9,14 +10,17 @@ const WORKSPACE_LINKS = [
   { href: "/tickets", label: "Tickets" },
   { href: "/boards", label: "Boards" },
   { href: "/clients", label: "Clients" },
+  { href: "/assets", label: "Assets" },
   { href: "/kb", label: "Knowledge Base" },
   { href: "/schedule", label: "Schedule" },
 ];
 
 const MANAGE_LINKS = [
+  { href: "/admin", label: "Admin" },
   { href: "/billing", label: "Billing" },
   { href: "/automation", label: "Automation" },
   { href: "/admin/sla", label: "SLA Policies" },
+  { href: "/admin/categories", label: "Categories" },
   { href: "/reports", label: "Reports" },
 ];
 
@@ -26,7 +30,13 @@ const CLIENT_NAV_LINKS = [
   { href: "/portal/kb", label: "Knowledge Base" },
 ];
 
-function Logomark() {
+function Logomark({ logoUrl }: { logoUrl?: string | null }) {
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logoUrl} alt="" className="h-6 w-6 flex-none rounded-[7px] object-contain" />
+    );
+  }
   return (
     <div className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] bg-gradient-to-br from-accent to-[#8f88ff]">
       <div className="h-[9px] w-[9px] rotate-45 rounded-sm bg-white" />
@@ -73,6 +83,8 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
 
   const isClient = session.user.actorType === "CLIENT";
   const canSeeAdmin = session.user.role === "ADMIN" || session.user.role === "MANAGER";
+  const settings = await getSettings();
+  const logoUrl = settings.logoMimeType ? `/api/branding/logo?v=${settings.updatedAt.getTime()}` : null;
 
   if (isClient) {
     return (
@@ -80,8 +92,8 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-50 border-b border-border bg-surface shadow">
           <div className="mx-auto flex max-w-3xl items-center gap-6 px-6 py-3">
             <div className="flex items-center gap-2">
-              <Logomark />
-              <span className="text-[15px] font-bold tracking-tight text-fg">LightPSA</span>
+              <Logomark logoUrl={logoUrl} />
+              <span className="text-[15px] font-bold tracking-tight text-fg">{settings.companyName}</span>
             </div>
             <nav className="flex gap-2">
               {CLIENT_NAV_LINKS.map((link) => (
@@ -110,8 +122,8 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-bg">
       <aside className="flex w-[232px] flex-none flex-col border-r border-border bg-surface-2 p-3">
         <div className="flex items-center gap-2 px-2 pb-4 pt-1.5">
-          <Logomark />
-          <span className="text-[15px] font-bold tracking-tight text-fg">LightPSA</span>
+          <Logomark logoUrl={logoUrl} />
+          <span className="text-[15px] font-bold tracking-tight text-fg">{settings.companyName}</span>
         </div>
         <NavGroup label="Workspace" links={WORKSPACE_LINKS} />
         {canSeeAdmin && <NavGroup label="Manage" links={MANAGE_LINKS} />}

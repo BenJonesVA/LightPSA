@@ -4,7 +4,8 @@ import { ContractType, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
-import { createContact, createAsset } from "../actions";
+import { createContact, createAsset, updateClient, deleteClient } from "../actions";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -91,6 +92,8 @@ export default async function ClientDetailPage({
 
   const createContactForClient = createContact.bind(null, client.id);
   const createAssetForClient = createAsset.bind(null, client.id);
+  const updateClientForClient = updateClient.bind(null, client.id);
+  const deleteClientForClient = deleteClient.bind(null, client.id);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -127,6 +130,44 @@ export default async function ClientDetailPage({
           )}
         </div>
       </div>
+
+      {canManage && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-[13.5px] font-semibold text-fg">Details</h2>
+          </CardHeader>
+          <form action={updateClientForClient} className="grid grid-cols-2 gap-3 p-4">
+            <input
+              name="name"
+              placeholder="Name"
+              required
+              defaultValue={client.name}
+              className="col-span-2 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-1"
+            />
+            <input
+              name="billingAddress"
+              placeholder="Billing address"
+              defaultValue={client.billingAddress ?? ""}
+              className="col-span-2 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-1"
+            />
+            <label className="col-span-2 flex items-center gap-2 text-sm text-fg-muted">
+              <input
+                type="checkbox"
+                name="isActive"
+                defaultChecked={client.isActive}
+                className="rounded border-border-strong accent-accent"
+              />
+              Active
+            </label>
+            <Button type="submit" variant="primary" className="col-span-2 sm:col-span-1">
+              Save
+            </Button>
+          </form>
+          <div className="flex justify-end border-t border-border p-4">
+            <DeleteButton action={deleteClientForClient} label="Delete client" />
+          </div>
+        </Card>
+      )}
 
       {/* Contacts */}
       <Card>

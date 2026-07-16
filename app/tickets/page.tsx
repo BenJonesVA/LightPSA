@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import type { Prisma, SlaPolicy, TicketPriority, TicketStatus } from "@prisma/client";
 import { getSlaStatus } from "@/lib/sla";
-import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { bulkUpdateTickets } from "./actions";
+import { TicketsTable, type TicketRow } from "./tickets-table";
 
 const STATUS_OPTIONS: TicketStatus[] = [
   "OPEN",
@@ -54,38 +54,31 @@ export default async function TicketsPage({
 
   const policyByPriority = new Map<TicketPriority, SlaPolicy>(policies.map((p) => [p.priority, p]));
 
-  function slaCell(ticket: (typeof tickets)[number]) {
+  function slaInfo(ticket: (typeof tickets)[number]): TicketRow["sla"] {
     if (ticket.status === "RESOLVED" || ticket.status === "CLOSED") {
-      return <span className="text-xs text-fg-subtle">—</span>;
+      return { text: "—", tone: "subtle" };
     }
     const policy = policyByPriority.get(ticket.priority);
     if (!policy || !policy.isActive) {
-      return <span className="text-xs text-fg-subtle">No policy</span>;
+      return { text: "No policy", tone: "subtle" };
     }
     const sla = getSlaStatus(ticket, policy);
-    if (sla.resolutionBreached) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-red">
-          <span className="h-[6px] w-[6px] rounded-[2px] bg-red" />
-          Resolution overdue
-        </span>
-      );
-    }
-    if (sla.responseBreached) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-red">
-          <span className="h-[6px] w-[6px] rounded-[2px] bg-red" />
-          Response overdue
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-green">
-        <span className="h-[6px] w-[6px] rounded-[2px] bg-green" />
-        On track
-      </span>
-    );
+    if (sla.resolutionBreached) return { text: "Resolution overdue", tone: "red" };
+    if (sla.responseBreached) return { text: "Response overdue", tone: "red" };
+    return { text: "On track", tone: "green" };
   }
+
+  const rows: TicketRow[] = tickets.map((ticket) => ({
+    id: ticket.id,
+    title: ticket.title,
+    boardName: ticket.board.name,
+    clientName: ticket.client.name,
+    status: ticket.status,
+    priority: ticket.priority,
+    assigneeName: ticket.assignee?.name ?? null,
+    createdAt: ticket.createdAt.toISOString(),
+    sla: slaInfo(ticket),
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,57 +132,7 @@ export default async function TicketsPage({
         </Link>
       </form>
 
-      <Card className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-              <th className="px-4 py-2.5">Ticket</th>
-              <th className="px-4 py-2.5">Title</th>
-              <th className="px-4 py-2.5">Board</th>
-              <th className="px-4 py-2.5">Client</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Priority</th>
-              <th className="px-4 py-2.5">SLA</th>
-              <th className="px-4 py-2.5">Assignee</th>
-              <th className="px-4 py-2.5">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.map((ticket) => (
-              <tr key={ticket.id} className="border-b border-grid hover:bg-surface-2">
-                <td className="px-4 py-row-py font-mono font-medium text-fg-muted">
-                  <Link href={`/tickets/${ticket.id}`} className="hover:text-accent">
-                    #{ticket.id}
-                  </Link>
-                </td>
-                <td className="max-w-[280px] truncate px-4 py-row-py text-fg">
-                  <Link href={`/tickets/${ticket.id}`} className="hover:text-accent">
-                    {ticket.title}
-                  </Link>
-                </td>
-                <td className="px-4 py-row-py text-fg-muted">{ticket.board.name}</td>
-                <td className="px-4 py-row-py text-fg-muted">{ticket.client.name}</td>
-                <td className="px-4 py-row-py">
-                  <StatusBadge status={ticket.status} />
-                </td>
-                <td className="px-4 py-row-py">
-                  <PriorityBadge priority={ticket.priority} />
-                </td>
-                <td className="px-4 py-row-py">{slaCell(ticket)}</td>
-                <td className="px-4 py-row-py text-fg-muted">{ticket.assignee?.name ?? "Unassigned"}</td>
-                <td className="px-4 py-row-py text-fg-subtle">{ticket.createdAt.toLocaleString()}</td>
-              </tr>
-            ))}
-            {tickets.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-fg-subtle">
-                  No tickets match the current filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </Card>
+      <TicketsTable rows={rows} bulkUpdate={bulkUpdateTickets} />
     </div>
   );
 }

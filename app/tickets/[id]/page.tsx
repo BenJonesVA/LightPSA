@@ -12,10 +12,14 @@ import {
   linkAsset,
   unlinkAsset,
   uploadAttachment,
+  startTimer,
+  stopTimer,
+  toggleExpensesEnabled,
 } from "../actions";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
 import { CannedResponsePicker } from "./canned-response-picker";
+import { TimerControl } from "./timer-control";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -36,7 +40,7 @@ export default async function TicketDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireStaff();
+  const user = await requireStaff();
 
   const { id } = await params;
   const ticketId = Number(id);
@@ -82,6 +86,8 @@ export default async function TicketDetailPage({
 
   const linkedAssetIds = new Set(ticket.ticketAssets.map((ta) => ta.assetId));
   const linkableAssets = clientAssets.filter((asset) => !linkedAssetIds.has(asset.id));
+  const openTimer = ticket.timeLogs.find((log) => log.userId === user.id && log.endTime === null);
+  const showExpenses = ticket.expensesEnabled || ticket.expenses.length > 0;
 
   const sla =
     slaPolicy && slaPolicy.isActive && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED"
@@ -107,6 +113,21 @@ export default async function TicketDetailPage({
   async function submitTimeLog(formData: FormData) {
     "use server";
     await logTime(ticketId, formData);
+  }
+
+  async function submitStartTimer() {
+    "use server";
+    await startTimer(ticketId);
+  }
+
+  async function submitStopTimer() {
+    "use server";
+    await stopTimer(ticketId);
+  }
+
+  async function submitToggleExpenses(formData: FormData) {
+    "use server";
+    await toggleExpensesEnabled(ticketId, formData);
   }
 
   async function submitExpense(formData: FormData) {
@@ -153,11 +174,18 @@ export default async function TicketDetailPage({
             <p className="mt-2 whitespace-pre-wrap text-[13.5px] text-fg">{ticket.description}</p>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-4 ${showExpenses ? "sm:grid-cols-2" : ""}`}>
             <Card className="p-4">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-                Time logs
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+                  Time logs
+                </h2>
+                <TimerControl
+                  openTimerStart={openTimer ? openTimer.startTime.toISOString() : null}
+                  onStart={submitStartTimer}
+                  onStop={submitStopTimer}
+                />
+              </div>
               {ticket.timeLogs.length === 0 ? (
                 <p className="mt-2 text-[13px] text-fg-subtle">No time logged yet.</p>
               ) : (
@@ -165,7 +193,7 @@ export default async function TicketDetailPage({
                   {ticket.timeLogs.map((log) => (
                     <li key={log.id} className="flex items-center justify-between py-2">
                       <span className="text-fg-muted">
-                        {log.durationMinutes} min · {log.workType}
+                        {log.endTime === null ? "Running…" : `${log.durationMinutes} min`} · {log.workType}
                       </span>
                       <span className={log.billable ? "font-medium text-green" : "text-fg-subtle"}>
                         {log.billable ? "Billable" : "Non-billable"}
@@ -219,6 +247,7 @@ export default async function TicketDetailPage({
               </form>
             </Card>
 
+            {showExpenses && (
             <Card className="p-4">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
                 Expenses
@@ -293,6 +322,7 @@ export default async function TicketDetailPage({
                 </div>
               </form>
             </Card>
+            )}
           </div>
 
           <Card className="p-4">
@@ -447,6 +477,16 @@ export default async function TicketDetailPage({
                 Update
               </Button>
             </form>
+
+            <form action={submitToggleExpenses} className="mt-2 flex items-center justify-between border-t border-border pt-4">
+              <label className="flex items-center gap-2 text-xs text-fg-muted">
+                <input type="checkbox" name="expensesEnabled" defaultChecked={ticket.expensesEnabled} />
+                Track expenses
+              </label>
+              <Button type="submit" variant="secondary" size="sm">
+                Update
+              </Button>
+            </form>
           </Card>
 
           <Card className="p-[18px]">
@@ -481,7 +521,7 @@ export default async function TicketDetailPage({
                 <select
                   name="assetId"
                   required
-                  className="flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                  className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
                 >
                   <option value="">Link an asset…</option>
                   {linkableAssets.map((asset) => (

@@ -30,16 +30,19 @@ export default auth((req) => {
 
 export const config = {
   // Everything except the NextAuth API routes, the login page, static assets,
-  // the cron API routes, the inbound-email webhook, and the CSAT survey
-  // routes. Cron routes are called by a scheduler with no browser session —
-  // they authenticate via their own CRON_SECRET bearer check
-  // (lib/cron-auth.ts) instead. The inbound-email webhook is called by
+  // the cron API routes, the inbound-email webhook, the CSAT survey routes,
+  // and the branding logo route. Cron routes are called by a scheduler with
+  // no browser session — they authenticate via their own CRON_SECRET bearer
+  // check (lib/cron-auth.ts) instead. The inbound-email webhook is called by
   // Postmark, also with no session — it authenticates via a secret token
   // query param (see app/api/inbound-email/route.ts). CSAT survey links go
   // to a client contact who isn't logged in at all — the unguessable
   // CsatResponse id in the URL *is* the authorization for that route, same
-  // role the bearer/token checks play for cron and inbound email.
+  // role the bearer/token checks play for cron and inbound email. The
+  // branding logo route is deliberately public — it renders on the
+  // unauthenticated login page and client-portal header (see
+  // app/api/branding/logo/route.ts).
   matcher: [
-    "/((?!api/auth|api/cron|api/inbound-email|csat|login|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/auth|api/cron|api/inbound-email|api/branding|csat|login|_next/static|_next/image|favicon.ico).*)",
   ],
 };

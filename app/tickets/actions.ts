@@ -18,6 +18,7 @@ export async function createTicket(formData: FormData) {
   const clientId = String(formData.get("clientId") ?? "");
   const priority = String(formData.get("priority") ?? "MEDIUM") as TicketPriority;
   const categoryId = formData.get("categoryId") ? String(formData.get("categoryId")) : null;
+  const expensesEnabled = formData.get("expensesEnabled") === "on";
 
   if (!title || !boardId || !clientId) {
     throw new Error("Title, board, and client are required.");
@@ -31,6 +32,7 @@ export async function createTicket(formData: FormData) {
       clientId,
       priority,
       categoryId,
+      expensesEnabled,
       source: "MANUAL",
     },
   });
@@ -63,7 +65,7 @@ export async function addComment(ticketId: number, formData: FormData) {
 }
 
 export async function updateTicketStatus(ticketId: number, status: string) {
-  await requireStaff();
+  const user = await requireStaff();
 
   const newStatus = status as TicketStatus;
   const current = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
@@ -96,12 +98,26 @@ export async function updateTicketStatus(ticketId: number, status: string) {
     await triggerCsatSurvey(updated);
   }
 
+  // Audit trail: who changed it and from what, as an internal comment so it
+  // doesn't show up as client-facing chatter (same isInternal semantics used
+  // throughout this codebase).
+  if (newStatus !== current.status) {
+    await prisma.ticketComment.create({
+      data: {
+        ticketId,
+        body: `Status changed from ${current.status.replace(/_/g, " ")} to ${newStatus.replace(/_/g, " ")} by ${user.name}.`,
+        isInternal: true,
+        authorUserId: user.id,
+      },
+    });
+  }
+
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");
 }
 
 export async function updateTicketPriority(ticketId: number, formData: FormData) {
-  await requireStaff();
+  const user = await requireStaff();
 
   const newPriority = String(formData.get("priority") ?? "") as TicketPriority;
   if (!newPriority) return;
@@ -121,7 +137,41 @@ export async function updateTicketPriority(ticketId: number, formData: FormData)
     await runAutomationRules(updated, "PRIORITY_ESCALATED");
   }
 
+  if (newPriority !== current.priority) {
+    await prisma.ticketComment.create({
+      data: {
+        ticketId,
+        body: `Priority changed from ${current.priority} to ${newPriority} by ${user.name}.`,
+        isInternal: true,
+        authorUserId: user.id,
+      },
+    });
+  }
+
   revalidatePath(`/tickets/${ticketId}`);
+  revalidatePath("/tickets");
+}
+
+export async function bulkUpdateTickets(ticketIds: number[], formData: FormData) {
+  await requireStaff();
+
+  const status = String(formData.get("status") ?? "");
+  const priority = String(formData.get("priority") ?? "");
+  if (!status && !priority) return;
+
+  // Reuse the single-ticket actions per id rather than a raw updateMany —
+  // that's what keeps resolvedAt/closedAt stamping, automation triggers,
+  // CSAT sends, and the audit-log comment all correct for a bulk change too,
+  // instead of re-deriving that logic a second time here.
+  for (const ticketId of ticketIds) {
+    if (status) await updateTicketStatus(ticketId, status);
+    if (priority) {
+      const priorityFormData = new FormData();
+      priorityFormData.set("priority", priority);
+      await updateTicketPriority(ticketId, priorityFormData);
+    }
+  }
+
   revalidatePath("/tickets");
 }
 
@@ -175,6 +225,58 @@ export async function logExpense(ticketId: number, formData: FormData) {
       billable,
     },
   });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function startTimer(ticketId: number) {
+  const user = await requireStaff();
+
+  const existing = await prisma.timeLog.findFirst({
+    where: { ticketId, userId: user.id, endTime: null },
+  });
+  if (existing) return; // already running for this user — idempotent, no duplicate open timers
+
+  await prisma.timeLog.create({
+    data: {
+      ticketId,
+      userId: user.id,
+      startTime: new Date(),
+      endTime: null,
+      durationMinutes: 0,
+      workType: "REMOTE",
+      billable: true,
+    },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function stopTimer(ticketId: number) {
+  const user = await requireStaff();
+
+  const open = await prisma.timeLog.findFirst({
+    where: { ticketId, userId: user.id, endTime: null },
+  });
+  if (!open) return;
+
+  const endTime = new Date();
+  const durationMinutes = Math.max(1, Math.round((endTime.getTime() - open.startTime.getTime()) / 60_000));
+
+  await prisma.timeLog.update({
+    where: { id: open.id },
+    data: { endTime, durationMinutes },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function toggleExpensesEnabled(ticketId: number, formData: FormData) {
+  await requireStaff();
+
+  const expensesEnabled = formData.get("expensesEnabled") === "on";
+
+  await prisma.ticket.update({ where: { id: ticketId }, data: { expensesEnabled } });
 
   revalidatePath(`/tickets/${ticketId}`);
 }
