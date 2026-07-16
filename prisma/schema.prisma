@@ -113,6 +113,7 @@ model User {
   kbArticles       KbArticle[]
   scheduledVisits  ScheduledVisit[] @relation("ScheduledVisitTechnician")
   automationAssignments AutomationRule[] @relation("AutomationActionAssignee")
+  uploadedAttachments   Attachment[]    @relation("AttachmentUploaderUser")
 
   @@index([role])
 }
@@ -160,6 +161,7 @@ model Contact {
 
   submittedTickets Ticket[]        @relation("TicketSubmitter")
   comments         TicketComment[] @relation("CommentAuthorContact")
+  uploadedAttachments Attachment[] @relation("AttachmentUploaderContact")
 
   @@index([clientId])
 }
@@ -280,6 +282,7 @@ model Ticket {
   csatResponse    CsatResponse?
   ticketAssets    TicketAsset[]
   scheduledVisits ScheduledVisit[]
+  attachments     Attachment[]
 
   @@index([boardId, status])
   @@index([clientId])
@@ -302,6 +305,31 @@ model TicketComment {
   body       String   @db.Text
   isInternal Boolean  @default(false) // internal notes are hidden from the client portal
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId])
+}
+
+// Files live on local disk (lib/storage.ts), keyed by this row's own id — the
+// client-supplied fileName is never used as the on-disk path, only for
+// display and the download Content-Disposition header.
+model Attachment {
+  id       String @id @default(cuid())
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+
+  isInternal Boolean @default(false) // same semantics as TicketComment.isInternal
+
+  uploadedByUserId    String?
+  uploadedByUser      User?    @relation("AttachmentUploaderUser", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  uploadedByContactId String?
+  uploadedByContact   Contact? @relation("AttachmentUploaderContact", fields: [uploadedByContactId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([ticketId])
 }

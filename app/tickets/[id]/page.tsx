@@ -11,12 +11,15 @@ import {
   logExpense,
   linkAsset,
   unlinkAsset,
+  uploadAttachment,
 } from "../actions";
+import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
 import { CannedResponsePicker } from "./canned-response-picker";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { formatBytes } from "@/lib/format";
 
 const STATUS_OPTIONS: TicketStatus[] = [
   "OPEN",
@@ -56,6 +59,10 @@ export default async function TicketDetailPage({
       csatResponse: true,
       ticketAssets: { include: { asset: true }, orderBy: { createdAt: "asc" } },
       scheduledVisits: { include: { technician: { select: { name: true } } }, orderBy: { startTime: "asc" } },
+      attachments: {
+        include: { uploadedByUser: { select: { name: true } }, uploadedByContact: { select: { firstName: true, lastName: true } } },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -110,6 +117,11 @@ export default async function TicketDetailPage({
   async function submitLinkAsset(formData: FormData) {
     "use server";
     await linkAsset(ticketId, formData);
+  }
+
+  async function submitUploadAttachment(formData: FormData) {
+    "use server";
+    await uploadAttachment(ticketId, formData);
   }
 
   return (
@@ -483,6 +495,63 @@ export default async function TicketDetailPage({
                 </Button>
               </form>
             )}
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Attachments
+            </div>
+            {ticket.attachments.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No files attached yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {ticket.attachments.map((att) => {
+                  const uploaderName = att.uploadedByUser
+                    ? att.uploadedByUser.name
+                    : att.uploadedByContact
+                      ? `${att.uploadedByContact.firstName} ${att.uploadedByContact.lastName}`
+                      : "Unknown";
+                  return (
+                    <li key={att.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                      <div className="min-w-0">
+                        <a
+                          href={`/api/attachments/${att.id}`}
+                          className="truncate font-medium text-accent hover:underline"
+                        >
+                          {att.fileName}
+                        </a>
+                        <div className="text-[11px] text-fg-subtle">
+                          {formatBytes(att.sizeBytes)} · {uploaderName}
+                          {att.isInternal ? " · internal only" : ""}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <form
+              action={submitUploadAttachment}
+              encType="multipart/form-data"
+              className="mt-3 flex flex-col gap-2 border-t border-border pt-3"
+            >
+              <input
+                type="file"
+                name="file"
+                required
+                className="text-[12.5px] text-fg-muted"
+              />
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs text-fg-muted">
+                  <input type="checkbox" name="isInternal" />
+                  Internal only (hidden from client)
+                </label>
+                <Button type="submit" variant="secondary" size="sm">
+                  Upload
+                </Button>
+              </div>
+              <p className="text-[10.5px] text-fg-subtle">Max {MAX_ATTACHMENT_MB}MB.</p>
+            </form>
           </Card>
 
           <Card className="p-[18px]">

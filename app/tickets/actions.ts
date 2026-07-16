@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import type { TicketPriority, TicketStatus, WorkType, ExpenseType } from "@prisma/client";
 import { runAutomationRules, isPriorityEscalation } from "@/lib/automation";
 import { triggerCsatSurvey } from "@/lib/csat";
+import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
 
 export async function createTicket(formData: FormData) {
   await requireStaff();
@@ -174,6 +175,33 @@ export async function logExpense(ticketId: number, formData: FormData) {
       billable,
     },
   });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function uploadAttachment(ticketId: number, formData: FormData) {
+  const user = await requireStaff();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return;
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`File exceeds the ${MAX_ATTACHMENT_MB}MB limit.`);
+  }
+
+  const isInternal = formData.get("isInternal") === "on";
+
+  const attachment = await prisma.attachment.create({
+    data: {
+      ticketId,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+      isInternal,
+      uploadedByUserId: user.id,
+    },
+  });
+
+  await saveAttachmentFile(attachment.id, Buffer.from(await file.arrayBuffer()));
 
   revalidatePath(`/tickets/${ticketId}`);
 }

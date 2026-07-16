@@ -5,7 +5,9 @@ import { requireClientSession } from "@/lib/rbac";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { addPortalComment } from "../../actions";
+import { addPortalComment, uploadPortalAttachment } from "../../actions";
+import { formatBytes } from "@/lib/format";
+import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 
 export default async function PortalTicketDetailPage({
   params,
@@ -30,6 +32,10 @@ export default async function PortalTicketDetailPage({
         orderBy: { createdAt: "asc" },
         include: { authorUser: true, authorContact: true },
       },
+      attachments: {
+        where: { isInternal: false },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -38,6 +44,11 @@ export default async function PortalTicketDetailPage({
   async function submitComment(formData: FormData) {
     "use server";
     await addPortalComment(ticketId, formData);
+  }
+
+  async function submitUploadAttachment(formData: FormData) {
+    "use server";
+    await uploadPortalAttachment(ticketId, formData);
   }
 
   return (
@@ -60,6 +71,43 @@ export default async function PortalTicketDetailPage({
       <Card className="rounded-2xl p-6">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-fg-subtle">Description</h2>
         <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-fg">{ticket.description}</p>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="px-6 py-4">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-fg-subtle">Attachments</h2>
+        </CardHeader>
+
+        <ul className="flex flex-col divide-y divide-grid px-6">
+          {ticket.attachments.map((att) => (
+            <li key={att.id} className="flex items-center justify-between gap-3 py-4">
+              <a
+                href={`/portal/attachments/${att.id}`}
+                className="truncate text-[14.5px] font-medium text-accent hover:underline"
+              >
+                {att.fileName}
+              </a>
+              <span className="whitespace-nowrap text-[12.5px] text-fg-subtle">{formatBytes(att.sizeBytes)}</span>
+            </li>
+          ))}
+          {ticket.attachments.length === 0 ? (
+            <li className="py-6 text-center text-[14px] text-fg-subtle">No files attached yet.</li>
+          ) : null}
+        </ul>
+
+        <form
+          action={submitUploadAttachment}
+          encType="multipart/form-data"
+          className="flex flex-col gap-3 border-t border-border px-6 py-5"
+        >
+          <input type="file" name="file" required className="text-[14px] text-fg-muted" />
+          <div className="flex items-center justify-between">
+            <span className="text-[12.5px] text-fg-subtle">Max {MAX_ATTACHMENT_MB}MB.</span>
+            <Button type="submit" variant="secondary" className="px-5 py-2.5 text-[14px]">
+              Upload
+            </Button>
+          </div>
+        </form>
       </Card>
 
       <Card className="rounded-2xl">

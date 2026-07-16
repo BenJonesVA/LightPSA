@@ -28,6 +28,11 @@ ENV NODE_ENV=production
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The uploads volume (docker-compose.yml) mounts here. Docker creates a
+# missing mount point as root before the container's entrypoint runs, which
+# the unprivileged nextjs user then can't write to — pre-creating it with the
+# right ownership avoids that.
+RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
 USER nextjs
 EXPOSE 3131
 ENV PORT=3131

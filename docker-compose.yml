@@ -54,9 +54,12 @@ services:
       DATABASE_URL: postgresql://psa:psa@postgres:5432/psa?schema=public
     ports:
       - "3131:3131"
+    volumes:
+      - psa_uploads_data:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
 
 volumes:
   psa_postgres_data:
+  psa_uploads_data:
