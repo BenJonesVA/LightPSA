@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/rbac";
 import { updateArticle } from "../../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default async function EditKbArticlePage({
   params,
@@ -42,13 +43,7 @@ export default async function EditKbArticlePage({
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Body</label>
-            <textarea
-              name="body"
-              rows={10}
-              defaultValue={article.body}
-              required
-              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-            />
+            <RichTextEditor name="body" defaultValue={article.body} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

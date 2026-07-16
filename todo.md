@@ -165,15 +165,32 @@ next most likely).
   build` both clean. **Not verified:** no browser available, so grid layout/
   spacing is logic-verified only, not visually confirmed.
 
-- [ ] **WYSIWYG editor for the KB body and ticket description.** Both are plain
-  `<textarea>` today (`app/kb/new/page.tsx`, `app/kb/[id]/edit/page.tsx`, and
-  the ticket creation form). Needs a rich-text library — Tiptap recommended,
-  it's headless and fits this repo's minimal-dependency style better than a
-  bundled-UI editor. **Important:** these bodies currently render as trusted
-  plain text (`whitespace-pre-wrap`, e.g. `app/tickets/[id]/page.tsx:153`).
-  Switching to rendered HTML without sanitizing stored content on save and/or
-  render is a stored-XSS hole — sanitization isn't optional polish here, it's
-  required before this ships.
+- [x] **WYSIWYG editor for the KB body and ticket description.** Added a Tiptap
+  editor (`components/ui/rich-text-editor.tsx`, bridged into existing plain
+  Server Action forms via a hidden input synced on `onUpdate`) for KB article
+  body (`app/kb/new`, `app/kb/[id]/edit`) and ticket description
+  (`app/tickets/new`). All rendering of stored bodies now goes through
+  `components/ui/rich-text.tsx` (`dangerouslySetInnerHTML` on already-
+  sanitized HTML) in place of the old `whitespace-pre-wrap` plain text — staff
+  and portal KB views, staff and portal ticket detail views.
+  **Sanitization (the hard requirement):** `lib/sanitize-html.ts` exports
+  `sanitizeRichText()`, a single allowlist (`p, br, h1-h3, blockquote, ul, ol,
+  li, pre, code, strong, em, u, s, a[href]`, schemes restricted to
+  `http`/`https`/`mailto`, no `class`/`style`/event attributes) used by every
+  save action — `createArticle`/`updateArticle`, `createTicket`, and the
+  client-portal `createPortalTicket` (which stays a plain `<textarea>`, no
+  Tiptap, but its input is escaped to safe HTML via `escapePlainTextToHtml`
+  and still run through the same sanitizer for defense in depth). This is the
+  server-side boundary — sanitizing only matters here, not client-side, since
+  a raw POST to any of these Server Actions bypasses Tiptap entirely (this
+  session literally exercised that exact bypass technique against other
+  actions earlier). Verified the allowlist empirically (script/event-handler/
+  class/style/iframe/javascript: all stripped; http/https/mailto survive;
+  empty string handled). `tsc --noEmit` and `npm run build` both clean.
+  **Not verified:** no browser available — the editor's actual UI, hydration
+  (`immediatelyRender: false` is set, the standard Tiptap/Next App Router
+  fix, but unconfirmed live), and a real save→render round trip all need a
+  manual click-through.
 
 - [ ] **Dashboard redesign to match the original Claude Design mock.** `plan.md`
   references a Design project (`2c0ced40-c7a3-454a-8606-231613c330dd`, file

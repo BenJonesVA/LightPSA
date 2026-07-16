@@ -8,6 +8,7 @@ import type { TicketPriority, TicketStatus, WorkType, ExpenseType } from "@prism
 import { runAutomationRules, isPriorityEscalation } from "@/lib/automation";
 import { triggerCsatSurvey } from "@/lib/csat";
 import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
+import { sanitizeRichText } from "@/lib/sanitize-html";
 
 export async function createTicket(formData: FormData) {
   await requireStaff();
@@ -27,7 +28,7 @@ export async function createTicket(formData: FormData) {
   const ticket = await prisma.ticket.create({
     data: {
       title,
-      description,
+      description: sanitizeRichText(description),
       boardId,
       clientId,
       priority,

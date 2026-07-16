@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/rbac";
 import { createArticle } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default async function NewKbArticlePage() {
   await requireStaff();
@@ -30,12 +31,7 @@ export default async function NewKbArticlePage() {
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Body</label>
-            <textarea
-              name="body"
-              rows={10}
-              required
-              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-            />
+            <RichTextEditor name="body" defaultValue="" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

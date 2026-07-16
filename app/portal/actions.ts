@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, notFound } from "next/navigation";
 import type { TicketPriority } from "@prisma/client";
 import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
+import { escapePlainTextToHtml, sanitizeRichText } from "@/lib/sanitize-html";
 
 export async function createPortalTicket(formData: FormData) {
   const user = await requireClientSession();
@@ -28,10 +29,14 @@ export async function createPortalTicket(formData: FormData) {
     throw new Error("No board is available to file this ticket against.");
   }
 
+  // Plain-textarea submission: escape to inert HTML first (belt), then run
+  // through the same sanitizer every other write path uses (suspenders).
+  const descriptionHtml = sanitizeRichText(escapePlainTextToHtml(description));
+
   const ticket = await prisma.ticket.create({
     data: {
       title,
-      description,
+      description: descriptionHtml,
       priority,
       source: "PORTAL",
       boardId: board.id,

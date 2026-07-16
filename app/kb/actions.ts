@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { redirect } from "next/navigation";
+import { sanitizeRichText } from "@/lib/sanitize-html";
 
 // Open to any staff role, not just ADMIN/MANAGER — a KB works best when
 // frontline techs actually write up the fixes they find, not just admins.
@@ -23,7 +24,7 @@ export async function createArticle(formData: FormData) {
   }
 
   const article = await prisma.kbArticle.create({
-    data: { title, body, boardId, categoryId, isInternal, createdById: user.id },
+    data: { title, body: sanitizeRichText(body), boardId, categoryId, isInternal, createdById: user.id },
   });
 
   redirect(`/kb/${article.id}`);
@@ -44,7 +45,7 @@ export async function updateArticle(articleId: string, formData: FormData) {
 
   await prisma.kbArticle.update({
     where: { id: articleId },
-    data: { title, body, boardId, categoryId, isInternal },
+    data: { title, body: sanitizeRichText(body), boardId, categoryId, isInternal },
   });
 
   redirect(`/kb/${articleId}`);

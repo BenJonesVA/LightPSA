@@ -24,6 +24,7 @@ import { AutoRefresh } from "./auto-refresh";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { RichText } from "@/components/ui/rich-text";
 import { formatBytes } from "@/lib/format";
 
 const STATUS_OPTIONS: TicketStatus[] = [
@@ -174,7 +175,7 @@ export default async function TicketDetailPage({
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
               Description
             </h2>
-            <p className="mt-2 whitespace-pre-wrap text-[13.5px] text-fg">{ticket.description}</p>
+            <RichText html={ticket.description} className="mt-2 text-[13.5px] text-fg" />
           </Card>
 
           <div className={`grid grid-cols-1 gap-4 ${showExpenses ? "sm:grid-cols-2" : ""}`}>

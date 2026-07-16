@@ -5,6 +5,7 @@ import { requireClientSession } from "@/lib/rbac";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { RichText } from "@/components/ui/rich-text";
 import { addPortalComment, uploadPortalAttachment } from "../../actions";
 import { formatBytes } from "@/lib/format";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
@@ -70,7 +71,7 @@ export default async function PortalTicketDetailPage({
 
       <Card className="rounded-2xl p-6">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-fg-subtle">Description</h2>
-        <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-fg">{ticket.description}</p>
+        <RichText html={ticket.description} className="mt-3 text-[15px] leading-relaxed text-fg" />
       </Card>
 
       <Card className="rounded-2xl">
