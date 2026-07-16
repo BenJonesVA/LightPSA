@@ -20,6 +20,7 @@ import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
 import { CannedResponsePicker } from "./canned-response-picker";
 import { TimerControl } from "./timer-control";
+import { AutoRefresh } from "./auto-refresh";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -147,6 +148,7 @@ export default async function TicketDetailPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <AutoRefresh />
       <Link href="/tickets" className="text-sm text-fg-subtle hover:text-fg">
         ← Back to Tickets
       </Link>

@@ -140,11 +140,19 @@ next most likely).
 
 ## Larger (multi-file, real design work — each probably deserves its own planning pass)
 
-- [ ] **Schedule Month / Day / Agenda views.** `app/schedule/page.tsx` currently
-  only renders a Week view (with technician filter and week nav). Add a view
-  switcher (`?view=week|month|day|agenda`) sharing the existing
-  `scheduledVisit` query, with three new render branches for the date-range
-  math and layout.
+- [x] **Schedule Month / Day / Agenda views.** `app/schedule/page.tsx` now has a
+  `?view=week|month|day|agenda` switcher (default `week`, so old links keep
+  working), one shared `scheduledVisit` query per visible range feeding all
+  four render branches, and the technician filter carried through every view
+  and every nav link. Month is a full calendar grid with dimmed adjacent-month
+  days and a "+N more" link into Day view; Agenda pages 30 days at a time.
+  Along the way, found and fixed a real timezone bug: `new Date(dateStr)`
+  parses `YYYY-MM-DD` as UTC midnight, which lands on the previous local day
+  in negative-offset timezones and silently breaks prev/next round-trips —
+  added a `parseLocalDate()` helper and verified the fix with a
+  `TZ=America/New_York` Node round-trip test. `tsc --noEmit` and `npm run
+  build` both clean. **Not verified:** no browser available, so grid layout/
+  spacing is logic-verified only, not visually confirmed.
 
 - [ ] **WYSIWYG editor for the KB body and ticket description.** Both are plain
   `<textarea>` today (`app/kb/new/page.tsx`, `app/kb/[id]/edit/page.tsx`, and
@@ -169,16 +177,26 @@ next most likely).
   on the dashboard today — likely a sign the original mock had charts there
   that never got wired up.
 
-- [ ] **Hover-preview on ticket list rows.** New small client component,
-  `setTimeout`-gated (1s delay) hover card showing a brief summary
-  (status/priority/client/assignee) in `app/tickets/page.tsx`. The data's
-  already in the list query — this is purely a UI/interaction addition.
+- [x] **Hover-preview on ticket list rows.** Added to
+  `app/tickets/tickets-table.tsx` (where row markup actually lives post the
+  mass-edit refactor, not `page.tsx`): 1s `setTimeout`-gated hover card
+  (status/priority/client/assignee, all already in `TicketRow` — no query
+  change needed) that cancels on mouseleave/mousedown so quick pass-overs and
+  clicks (checkbox toggle, row nav) never trigger or block on it; only one
+  card visible at a time; `pointer-events-none` + fixed positioning so it can
+  never intercept clicks. `tsc --noEmit` and `npm run build` both clean. **Not
+  verified:** no browser available to confirm hover timing/positioning feels
+  right in practice.
 
-- [ ] **Auto-refresh on the ticket detail screen.** Simplest approach: a tiny
-  client component using `setInterval` + `router.refresh()`, mounted in
-  `app/tickets/[id]/page.tsx`. Worth flagging up front: it should pause while
-  a comment/time-log/expense form has focus, so it doesn't clobber
-  in-progress typing.
+- [x] **Auto-refresh on the ticket detail screen.** New
+  `app/tickets/[id]/auto-refresh.tsx`, mounted with a two-line change in
+  `app/tickets/[id]/page.tsx` (same pattern as `timer-control.tsx`). Refreshes
+  every 20s via `router.refresh()`; pauses (skips the tick, doesn't tear down
+  the interval) while `document.activeElement` is inside a textarea/input/
+  contentEditable, tracked via document-level `focusin`/`focusout` listeners
+  cleaned up on unmount. `tsc --noEmit` and `npm run build` both clean. **Not
+  verified:** no browser available to confirm the pause-on-focus behavior
+  actually works across the comment/time-log/expense forms in practice.
 
 - [ ] **Permission-group RBAC system.** The biggest item on this list besides
   enterprise mode below. Today `role` is a fixed 3-value enum

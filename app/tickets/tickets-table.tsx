@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { TicketPriority, TicketStatus } from "@prisma/client";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+
+const HOVER_DELAY_MS = 1000;
 
 const STATUS_OPTIONS: TicketStatus[] = [
   "OPEN",
@@ -44,6 +46,50 @@ export function TicketsTable({
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState(false);
+  const [hoverPreview, setHoverPreview] = useState<{
+    row: TicketRow;
+    top: number;
+    left: number;
+  } | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
+
+  function clearHoverTimeout() {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }
+
+  function handleRowMouseEnter(row: TicketRow, event: React.MouseEvent<HTMLTableRowElement>) {
+    clearHoverTimeout();
+    const rect = event.currentTarget.getBoundingClientRect();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverPreview({
+        row,
+        top: rect.bottom + 6,
+        left: Math.min(rect.left, Math.max(0, window.innerWidth - 280)),
+      });
+      hoverTimeoutRef.current = null;
+    }, HOVER_DELAY_MS);
+  }
+
+  function handleRowMouseLeave() {
+    clearHoverTimeout();
+    setHoverPreview(null);
+  }
+
+  function handleRowMouseDown() {
+    // A click (checkbox toggle, link nav, etc.) shouldn't leave a hover card
+    // pending or pop one up right after the interaction.
+    clearHoverTimeout();
+    setHoverPreview(null);
+  }
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
@@ -71,6 +117,7 @@ export function TicketsTable({
   }
 
   return (
+    <>
     <Card className="overflow-x-auto">
       {selected.size > 0 && (
         <form
@@ -145,6 +192,9 @@ export function TicketsTable({
             <tr
               key={ticket.id}
               className={`border-b border-grid hover:bg-surface-2 ${selected.has(ticket.id) ? "bg-accent-weak" : ""}`}
+              onMouseEnter={(e) => handleRowMouseEnter(ticket, e)}
+              onMouseLeave={handleRowMouseLeave}
+              onMouseDown={handleRowMouseDown}
             >
               <td className="px-4 py-row-py">
                 <input
@@ -193,5 +243,31 @@ export function TicketsTable({
         </tbody>
       </table>
     </Card>
+
+    {hoverPreview && (
+      <Card
+        role="tooltip"
+        className="pointer-events-none fixed z-50 w-64 p-3 shadow-lg"
+        style={{ top: hoverPreview.top, left: hoverPreview.left }}
+      >
+        <div className="mb-1.5 truncate text-[13px] font-semibold text-fg">
+          {hoverPreview.row.title}
+        </div>
+        <div className="flex flex-col gap-1.5 text-[12.5px]">
+          <div className="flex items-center justify-between gap-2">
+            <StatusBadge status={hoverPreview.row.status} />
+            <PriorityBadge priority={hoverPreview.row.priority} />
+          </div>
+          <div className="text-fg-muted">
+            <span className="text-fg-subtle">Client:</span> {hoverPreview.row.clientName}
+          </div>
+          <div className="text-fg-muted">
+            <span className="text-fg-subtle">Assignee:</span>{" "}
+            {hoverPreview.row.assigneeName ?? "Unassigned"}
+          </div>
+        </div>
+      </Card>
+    )}
+    </>
   );
 }
