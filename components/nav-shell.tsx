@@ -5,24 +5,28 @@ import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DensityToggle } from "@/components/density-toggle";
 
-const WORKSPACE_LINKS = [
-  { href: "/", label: "Dashboard" },
-  { href: "/tickets", label: "Tickets" },
-  { href: "/boards", label: "Boards" },
-  { href: "/clients", label: "Clients" },
-  { href: "/assets", label: "Assets" },
-  { href: "/kb", label: "Knowledge Base" },
-  { href: "/schedule", label: "Schedule" },
-];
+function workspaceLinks(isEnterprise: boolean) {
+  return [
+    { href: "/", label: "Dashboard" },
+    { href: "/tickets", label: "Tickets" },
+    { href: "/boards", label: "Boards" },
+    { href: "/clients", label: isEnterprise ? "Departments" : "Clients" },
+    { href: "/assets", label: "Assets" },
+    { href: "/kb", label: "Knowledge Base" },
+    { href: "/schedule", label: "Schedule" },
+  ];
+}
 
-const MANAGE_LINKS = [
-  { href: "/admin", label: "Admin" },
-  { href: "/billing", label: "Billing" },
-  { href: "/automation", label: "Automation" },
-  { href: "/admin/sla", label: "SLA Policies" },
-  { href: "/admin/categories", label: "Categories" },
-  { href: "/reports", label: "Reports" },
-];
+function manageLinks(isEnterprise: boolean) {
+  return [
+    { href: "/admin", label: "Admin" },
+    ...(isEnterprise ? [] : [{ href: "/billing", label: "Billing" }]),
+    { href: "/automation", label: "Automation" },
+    { href: "/admin/sla", label: "SLA Policies" },
+    { href: "/admin/categories", label: "Categories" },
+    { href: "/reports", label: "Reports" },
+  ];
+}
 
 const CLIENT_NAV_LINKS = [
   { href: "/portal", label: "Portal" },
@@ -85,6 +89,7 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
   const canSeeAdmin = session.user.role === "ADMIN" || session.user.role === "MANAGER";
   const settings = await getSettings();
   const logoUrl = settings.logoMimeType ? `/api/branding/logo?v=${settings.updatedAt.getTime()}` : null;
+  const isEnterprise = settings.orgMode === "ENTERPRISE";
 
   if (isClient) {
     return (
@@ -125,8 +130,8 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
           <Logomark logoUrl={logoUrl} />
           <span className="text-[15px] font-bold tracking-tight text-fg">{settings.companyName}</span>
         </div>
-        <NavGroup label="Workspace" links={WORKSPACE_LINKS} />
-        {canSeeAdmin && <NavGroup label="Manage" links={MANAGE_LINKS} />}
+        <NavGroup label="Workspace" links={workspaceLinks(isEnterprise)} />
+        {canSeeAdmin && <NavGroup label="Manage" links={manageLinks(isEnterprise)} />}
         <div className="mt-auto flex items-center gap-[9px] border-t border-border pt-[14px]">
           <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-violet text-[11px] font-semibold text-white">
             {initials(session.user.name ?? "?")}

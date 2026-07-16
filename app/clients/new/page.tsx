@@ -1,12 +1,15 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { createClient } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export default async function NewClientPage() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const labels = await getOrgLabels();
 
   const clients = await prisma.client.findMany({
     orderBy: { name: "asc" },
@@ -15,7 +18,7 @@ export default async function NewClientPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="text-[24px] font-bold tracking-tight text-fg">New client</h1>
+      <h1 className="text-[24px] font-bold tracking-tight text-fg">New {labels.client.toLowerCase()}</h1>
 
       <Card className="mt-6 p-6">
         <form action={createClient} className="space-y-4">
@@ -38,7 +41,9 @@ export default async function NewClientPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-fg-muted">Parent company (optional)</label>
+            <label className="block text-sm font-medium text-fg-muted">
+              Parent {labels.client === "Department" ? "department" : "company"} (optional)
+            </label>
             <select
               name="parentId"
               className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
@@ -53,7 +58,7 @@ export default async function NewClientPage() {
           </div>
 
           <Button type="submit" variant="primary">
-            Create client
+            Create {labels.client.toLowerCase()}
           </Button>
         </form>
       </Card>

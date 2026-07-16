@@ -1,6 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { createAutomationRule } from "@/app/automation/actions";
 import { IdleMinutesField } from "@/app/automation/new/idle-minutes-field";
 import { Card } from "@/components/ui/card";
@@ -13,6 +14,8 @@ const SUB_LABEL_CLASS = "block text-[11.5px] font-medium text-fg-subtle";
 
 export default async function NewAutomationRulePage() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const labels = await getOrgLabels();
 
   const [boards, clients, users] = await Promise.all([
     prisma.board.findMany({ orderBy: { name: "asc" } }),
@@ -74,10 +77,10 @@ export default async function NewAutomationRulePage() {
               </div>
               <div>
                 <label htmlFor="conditionClientId" className={SUB_LABEL_CLASS}>
-                  Client
+                  {labels.client}
                 </label>
                 <select id="conditionClientId" name="conditionClientId" className={INPUT_CLASS}>
-                  <option value="">Any client</option>
+                  <option value="">Any {labels.client.toLowerCase()}</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.name}

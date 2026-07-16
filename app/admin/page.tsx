@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/rbac";
+import { isEnterpriseMode } from "@/lib/settings";
 import { Card } from "@/components/ui/card";
 
-const SECTIONS: { href: string; label: string; description: string; adminOnly?: boolean }[] = [
+const SECTIONS: { href: string; label: string; description: string; adminOnly?: boolean; hideInEnterprise?: boolean }[] = [
   {
     href: "/admin/branding",
     label: "Branding",
@@ -49,13 +50,18 @@ const SECTIONS: { href: string; label: string; description: string; adminOnly?: 
     href: "/billing",
     label: "Billing",
     description: "Contracts, rates, and invoice export.",
+    hideInEnterprise: true,
   },
 ];
 
 export default async function AdminHubPage() {
   const user = await requireRole(UserRole.ADMIN, UserRole.MANAGER);
 
-  const sections = SECTIONS.filter((s) => !s.adminOnly || user.role === UserRole.ADMIN);
+  const isEnterprise = await isEnterpriseMode();
+
+  const sections = SECTIONS.filter(
+    (s) => (!s.adminOnly || user.role === UserRole.ADMIN) && (!s.hideInEnterprise || !isEnterprise)
+  );
 
   return (
     <div className="flex flex-col gap-4">

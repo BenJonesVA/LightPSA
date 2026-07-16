@@ -26,7 +26,11 @@ export default async function LoginPage({
             {settings.tagline || "PSA — Professional Services Automation"}
           </p>
         </div>
-        <LoginForm callbackUrl={callbackUrl} error={error} />
+        <LoginForm
+          callbackUrl={callbackUrl}
+          error={error}
+          portalTabLabel={settings.orgMode === "ENTERPRISE" ? "Employee Portal" : "Client Portal"}
+        />
       </div>
     </div>
   );

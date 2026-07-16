@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -80,6 +81,11 @@ function AssetCategoryNode({
               Save
             </Button>
           </form>
+          <Link href={`/admin/asset-categories/${category.id}/fields`}>
+            <Button type="button" variant="secondary" size="sm">
+              Fields
+            </Button>
+          </Link>
           <DeleteButton action={deleteCategoryForId} label="Delete" />
         </div>
       </Card>

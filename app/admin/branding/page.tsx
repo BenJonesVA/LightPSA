@@ -73,6 +73,41 @@ export default async function BrandingAdminPage() {
             />
           </label>
 
+          <div>
+            <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">
+              Organization mode
+            </span>
+            <p className="mb-2 text-[12px] text-fg-muted">
+              Enterprise mode relabels Clients as Departments and Contacts as
+              Employees, and hides Billing/Contracts. No data is changed —
+              this only affects labels and visibility.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex cursor-pointer flex-col gap-1 rounded-xl border border-border-strong px-3 py-2.5 hover:bg-surface-2 has-[:checked]:border-accent has-[:checked]:bg-accent-weak">
+                <input
+                  type="radio"
+                  name="orgMode"
+                  value="MSP"
+                  defaultChecked={settings.orgMode === "MSP"}
+                  className="sr-only"
+                />
+                <span className="text-[13px] font-semibold text-fg">MSP</span>
+                <span className="text-[11px] text-fg-subtle">Clients, Contacts, Billing/Contracts</span>
+              </label>
+              <label className="flex cursor-pointer flex-col gap-1 rounded-xl border border-border-strong px-3 py-2.5 hover:bg-surface-2 has-[:checked]:border-accent has-[:checked]:bg-accent-weak">
+                <input
+                  type="radio"
+                  name="orgMode"
+                  value="ENTERPRISE"
+                  defaultChecked={settings.orgMode === "ENTERPRISE"}
+                  className="sr-only"
+                />
+                <span className="text-[13px] font-semibold text-fg">Enterprise</span>
+                <span className="text-[11px] text-fg-subtle">Departments, Employees, no Billing</span>
+              </label>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <Button type="submit" variant="primary">
               Save

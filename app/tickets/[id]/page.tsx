@@ -18,6 +18,7 @@ import {
 } from "../actions";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
+import { getOrgLabels } from "@/lib/settings";
 import { CannedResponsePicker } from "./canned-response-picker";
 import { TimerControl } from "./timer-control";
 import { AutoRefresh } from "./auto-refresh";
@@ -43,6 +44,7 @@ export default async function TicketDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireStaff();
+  const labels = await getOrgLabels();
 
   const { id } = await params;
   const ticketId = Number(id);
@@ -649,7 +651,7 @@ export default async function TicketDetailPage({
                     ? "Survey sent, awaiting response."
                     : ticket.contact
                       ? "Survey could not be sent — see internal comments for why."
-                      : "Survey not sent — no client contact on file."}
+                      : `Survey not sent — no ${labels.client.toLowerCase()} ${labels.contact.toLowerCase()} on file.`}
                 </p>
               )}
             </Card>
@@ -657,7 +659,7 @@ export default async function TicketDetailPage({
 
           <Card className="p-[18px]">
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-              Client
+              {labels.client}
             </div>
             <div className="text-[13px] font-semibold text-fg">{ticket.client.name}</div>
           </Card>

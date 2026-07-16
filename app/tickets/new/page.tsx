@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { createTicket } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,6 +8,8 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default async function NewTicketPage() {
   await requireStaff();
+
+  const labels = await getOrgLabels();
 
   const [boards, clients, categories] = await Promise.all([
     prisma.board.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -53,13 +56,13 @@ export default async function NewTicketPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-fg-muted">Client</label>
+              <label className="block text-sm font-medium text-fg-muted">{labels.client}</label>
               <select
                 name="clientId"
                 required
                 className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
               >
-                <option value="">Select a client</option>
+                <option value="">Select a {labels.client.toLowerCase()}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { isEnterpriseMode } from "@/lib/settings";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { approveTimeLog, lockTimeLog, approveExpense, lockExpense } from "./actions";
@@ -50,6 +52,10 @@ function BillableLabel({ billable }: { billable: boolean }) {
 
 export default async function BillingPage() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  if (await isEnterpriseMode()) {
+    notFound();
+  }
 
   const [timeLogs, expenses] = await Promise.all([
     prisma.timeLog.findMany({

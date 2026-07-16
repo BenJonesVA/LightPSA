@@ -145,9 +145,12 @@ next most likely).
   (`app/assets/page.tsx`, `app/assets/[id]/page.tsx`, `app/tickets/[id]/page.tsx`,
   `app/clients/[id]/page.tsx`, `app/clients/actions.ts`, `prisma/seed.ts`) to
   the new `asset.category.name` relation. `tsc --noEmit` and `npm run build`
-  both clean. **Scope note carried forward:** this is still just category
-  customization, not fully "customizable fields" (arbitrary attributes per
-  asset) — that remains a separate, later-scoped item.
+  both clean.
+
+- [x] **Assets are editable (including reassigning client/department) and
+  categories can define custom fields.** See `plan.md`'s "Assets — client/
+  department reassignment + per-category custom fields" entry for the full
+  writeup — closes out the "not fully customizable fields" scope note above.
 
 ## Larger (multi-file, real design work — each probably deserves its own planning pass)
 
@@ -244,21 +247,48 @@ next most likely).
 
 Decided shape, from a clarifying round with the user:
 
-- [ ] **Configurable, not a one-way migration.** Add an `orgMode` field
-  (`"MSP" | "ENTERPRISE"`, default `"MSP"`) to the `Setting` singleton
-  (`lib/settings.ts`, `prisma/schema.prisma`), toggleable from the admin
-  panel — the underlying `Client`/`Contract`/portal schema doesn't change,
-  only what's shown.
-- [ ] **Client/Contact are relabeled in the UI, not renamed in the schema.** In
-  enterprise mode, `Client` reads as "Department" (or collapses to a single
-  implicit org) and `Contact` reads as "Employee" — this is copy/conditional-
-  nav work, not a Prisma model rename (a real schema rename would be a much
-  bigger change for purely cosmetic value).
-- [ ] **Client portal stays, repurposed as employee self-service** — not removed.
-- [ ] **Billing/Contracts are hidden entirely** in enterprise mode: nav links,
-  `/billing`, and the contract section of the client detail page all become
-  conditional on `orgMode`.
-- Touches: `components/nav-shell.tsx` (conditional nav), `lib/settings.ts` +
-  schema migration, `app/admin/branding` or a new `/admin/general` settings
-  page for the toggle, plus every page/copy string that currently says
-  "Client"/"Contact"/"Billing" in a staff-facing (not raw data) context.
+- [x] **Configurable, not a one-way migration.** Added `orgMode`
+  (`OrgMode` enum: `MSP` | `ENTERPRISE`, default `MSP`) to the `Setting`
+  singleton (migration `20260716040000_org_mode`, hand-written like the
+  asset-categories one — `prisma migrate dev --create-only` errored on a
+  stale checksum for that earlier hand-written migration when replaying
+  against a shadow DB, so this one was authored directly and applied via
+  `prisma migrate deploy`). `lib/settings.ts` exports `isEnterpriseMode()`,
+  `getOrgLabels()`, and the underlying `orgLabels` map. Toggle lives on
+  `/admin/branding` (radio-card UI next to company name/logo, not a separate
+  `/admin/general` page) via `updateBranding`. The underlying
+  `Client`/`Contact`/`Contract`/portal schema is untouched — only labels and
+  visibility change.
+- [x] **Client/Contact are relabeled in the UI, not renamed in the schema.**
+  In enterprise mode `Client` → "Department"/"Departments" and `Contact` →
+  "Employee"/"Employees" everywhere staff-facing: nav (`components/
+  nav-shell.tsx`), dashboard stat tile, `/clients` list + detail + new-client
+  form, ticket list/detail/new-ticket forms (including the hover-preview
+  card, which needed a `clientLabel` prop threaded through since
+  `tickets-table.tsx` is a client component and can't call the server-only
+  label helper itself), automation rule list/builder, and the client
+  delete-guard/validation error strings. No Prisma model or field was
+  renamed.
+- [x] **Client portal stays, repurposed as employee self-service.** Turned
+  out to need almost no portal-page changes — the portal already read
+  generically ("Welcome, {name}", "My Tickets"), with no hardcoded "Client"
+  copy anywhere in `app/portal/*`. Only two visible strings actually said
+  "client": the login screen's "Client Portal" tab (now "Employee Portal" in
+  enterprise mode, threaded via a `portalTabLabel` prop since `login-form.tsx`
+  is a client component rendered before any session exists) and the KB
+  editor's "hidden from the client portal" checkbox hint.
+- [x] **Billing/Contracts hidden entirely** in enterprise mode: `/billing`
+  page and `/billing/export` CSV route both return 404/`notFound()`, the
+  Billing card is filtered out of the `/admin` hub, the Contracts card on
+  the client detail page is conditionally rendered, and — found during this
+  pass, not in the original scope note — the Reports page's "Retainer
+  consumption" card is also gated the same way, since it's billing/contract
+  data.
+- Verified live end-to-end against the dev server (port 3000) using a
+  logged-in ADMIN session: submitted the `/admin/branding` toggle to
+  `ENTERPRISE` and confirmed nav showed "Departments" with no Billing link,
+  `/billing` 404'd, `/admin` hub had no Billing card, `/clients` read
+  "Departments", and a client detail page showed "Employees" with no
+  Contracts section — then toggled back to `MSP` and confirmed `/billing`
+  (200, "Billing Review Queue") and `/clients` ("Clients") both reverted.
+  `tsc --noEmit` and `npm run build` both clean throughout.

@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { Card } from "@/components/ui/card";
 
 export default async function AssetsPage() {
   await requireStaff();
+
+  const labels = await getOrgLabels();
 
   const assets = await prisma.asset.findMany({
     include: { client: true, category: true },
@@ -28,7 +31,7 @@ export default async function AssetsPage() {
               <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
                 <th className="px-4 py-2.5">Name</th>
                 <th className="px-4 py-2.5">Type</th>
-                <th className="px-4 py-2.5">Client</th>
+                <th className="px-4 py-2.5">{labels.client}</th>
                 <th className="px-4 py-2.5">Serial number</th>
                 <th className="px-4 py-2.5">Status</th>
               </tr>

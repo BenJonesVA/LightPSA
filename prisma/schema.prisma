@@ -67,6 +67,11 @@ enum FlatRateUnit {
   PER_USER
 }
 
+enum OrgMode {
+  MSP
+  ENTERPRISE
+}
+
 enum AutomationTrigger {
   TICKET_CREATED
   STATUS_CHANGED
@@ -442,6 +447,10 @@ model AssetCategory {
   parent   AssetCategory?  @relation("AssetCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children AssetCategory[] @relation("AssetCategoryHierarchy")
 
+  // Array of AssetFieldDef (lib/asset-fields.ts): admin-defined custom fields
+  // that assets in this category present on their create/edit forms.
+  fieldSchema Json?
+
   assets Asset[]
 
   @@index([parentId])
@@ -459,6 +468,11 @@ model Asset {
   serialNumber String?
   notes        String?       @db.Text
   isActive     Boolean       @default(true)
+
+  // Values keyed by AssetFieldDef.key from this asset's category.fieldSchema
+  // at the time each value was saved (lib/asset-fields.ts). Not re-validated
+  // against the category's current schema until the next edit.
+  customFields Json?
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -551,6 +565,7 @@ model Setting {
   companyName  String   @default("LightPSA")
   tagline      String?
   logoMimeType String?
+  orgMode      OrgMode  @default(MSP)
   updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 }
 

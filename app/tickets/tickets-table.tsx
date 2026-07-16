@@ -40,9 +40,11 @@ const SLA_TONE_CLASS: Record<TicketRow["sla"]["tone"], string> = {
 export function TicketsTable({
   rows,
   bulkUpdate,
+  clientLabel = "Client",
 }: {
   rows: TicketRow[];
   bulkUpdate: (ticketIds: number[], formData: FormData) => Promise<void>;
+  clientLabel?: string;
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState(false);
@@ -179,7 +181,7 @@ export function TicketsTable({
             <th className="px-4 py-2.5">Ticket</th>
             <th className="px-4 py-2.5">Title</th>
             <th className="px-4 py-2.5">Board</th>
-            <th className="px-4 py-2.5">Client</th>
+            <th className="px-4 py-2.5">{clientLabel}</th>
             <th className="px-4 py-2.5">Status</th>
             <th className="px-4 py-2.5">Priority</th>
             <th className="px-4 py-2.5">SLA</th>
@@ -259,7 +261,7 @@ export function TicketsTable({
             <PriorityBadge priority={hoverPreview.row.priority} />
           </div>
           <div className="text-fg-muted">
-            <span className="text-fg-subtle">Client:</span> {hoverPreview.row.clientName}
+            <span className="text-fg-subtle">{clientLabel}:</span> {hoverPreview.row.clientName}
           </div>
           <div className="text-fg-muted">
             <span className="text-fg-subtle">Assignee:</span>{" "}

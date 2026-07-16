@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
+import { isEnterpriseMode } from "@/lib/settings";
 import { updateArticle } from "../../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ export default async function EditKbArticlePage({
   params: Promise<{ id: string }>;
 }) {
   await requireStaff();
+  const isEnterprise = await isEnterpriseMode();
   const { id } = await params;
 
   const [article, boards, categories] = await Promise.all([
@@ -82,7 +84,7 @@ export default async function EditKbArticlePage({
 
           <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input type="checkbox" name="isInternal" defaultChecked={article.isInternal} />
-            Internal only (hidden from the client portal)
+            Internal only (hidden from the {isEnterprise ? "employee" : "client"} portal)
           </label>
 
           <div className="flex justify-end gap-3">

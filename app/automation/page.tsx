@@ -2,6 +2,7 @@ import { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { toggleAutomationRule } from "@/app/automation/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,8 @@ function RuleToggle({ isActive }: { isActive: boolean }) {
 export default async function AutomationRulesPage() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
 
+  const labels = await getOrgLabels();
+
   const rules = await prisma.automationRule.findMany({
     orderBy: { createdAt: "desc" },
     include: {
@@ -90,7 +93,7 @@ export default async function AutomationRulesPage() {
                 const conditions: string[] = [];
                 if (rule.conditionBoard) conditions.push(`Board: ${rule.conditionBoard.name}`);
                 if (rule.conditionPriority) conditions.push(`Priority: ${rule.conditionPriority}`);
-                if (rule.conditionClient) conditions.push(`Client: ${rule.conditionClient.name}`);
+                if (rule.conditionClient) conditions.push(`${labels.client}: ${rule.conditionClient.name}`);
                 if (rule.conditionIdleMinutes) conditions.push(`Idle ≥ ${rule.conditionIdleMinutes}m`);
                 if (conditions.length === 0) conditions.push("Any");
 

@@ -1,6 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { isEnterpriseMode } from "@/lib/settings";
 
 function csvEscape(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -15,6 +16,10 @@ function csvRow(fields: (string | number)[]): string {
 
 export async function GET() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  if (await isEnterpriseMode()) {
+    return new Response("Not found", { status: 404 });
+  }
 
   const [timeLogs, expenses] = await Promise.all([
     prisma.timeLog.findMany({

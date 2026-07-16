@@ -4,7 +4,15 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
-export function LoginForm({ callbackUrl, error }: { callbackUrl?: string; error?: string }) {
+export function LoginForm({
+  callbackUrl,
+  error,
+  portalTabLabel = "Client Portal",
+}: {
+  callbackUrl?: string;
+  error?: string;
+  portalTabLabel?: string;
+}) {
   const [tab, setTab] = useState<"staff" | "client">("staff");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -50,7 +58,7 @@ export function LoginForm({ callbackUrl, error }: { callbackUrl?: string; error?
             tab === "client" ? "bg-surface text-fg shadow" : "text-fg-muted"
           }`}
         >
-          Client Portal
+          {portalTabLabel}
         </button>
       </div>
 

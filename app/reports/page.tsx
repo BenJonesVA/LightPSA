@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/rbac";
 import { getSlaStatus } from "@/lib/sla";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
 import { formatDuration } from "@/lib/format";
+import { isEnterpriseMode } from "@/lib/settings";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Bar } from "@/components/ui/bar-chart";
 import { ColumnChart } from "@/components/ui/column-chart";
@@ -23,6 +24,8 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
 
 export default async function ReportsPage() {
   await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+
+  const isEnterprise = await isEnterpriseMode();
 
   const now = new Date();
   const periodStart = new Date(now.getTime() - PERIOD_DAYS * DAY_MS);
@@ -249,6 +252,7 @@ export default async function ReportsPage() {
         )}
       </Card>
 
+      {!isEnterprise && (
       <Card>
         <CardHeader>
           <h2 className="text-[13.5px] font-semibold text-fg">Retainer consumption — current period</h2>
@@ -272,6 +276,7 @@ export default async function ReportsPage() {
           </div>
         )}
       </Card>
+      )}
 
       <Card>
         <CardHeader>

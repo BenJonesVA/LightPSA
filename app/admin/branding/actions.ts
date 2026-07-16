@@ -13,6 +13,8 @@ export async function updateBranding(formData: FormData) {
 
   const companyName = String(formData.get("companyName") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
+  const orgModeRaw = String(formData.get("orgMode") ?? "MSP");
+  const orgMode = orgModeRaw === "ENTERPRISE" ? "ENTERPRISE" : "MSP";
 
   if (!companyName) {
     throw new Error("Company name is required");
@@ -35,6 +37,7 @@ export async function updateBranding(formData: FormData) {
   await updateSettings({
     companyName,
     tagline,
+    orgMode,
     ...(logoMimeType ? { logoMimeType } : {}),
   });
 

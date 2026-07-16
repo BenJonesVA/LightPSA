@@ -4,11 +4,14 @@ import { ContractType, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
+import { getSettings, orgLabels } from "@/lib/settings";
+import { parseFieldSchema } from "@/lib/asset-fields";
 import { createContact, createAsset, updateClient, deleteClient } from "../actions";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { AssetCategoryFields } from "@/components/ui/asset-category-fields";
 
 const PERIOD_DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
@@ -25,6 +28,10 @@ export default async function ClientDetailPage({
 }) {
   const staff = await requireStaff();
   const canManage = staff.role === UserRole.ADMIN || staff.role === UserRole.MANAGER;
+
+  const settings = await getSettings();
+  const isEnterprise = settings.orgMode === "ENTERPRISE";
+  const labels = orgLabels[settings.orgMode];
 
   const { id } = await params;
 
@@ -81,6 +88,11 @@ export default async function ClientDetailPage({
   );
 
   const assetCategories = await prisma.assetCategory.findMany({ orderBy: { name: "asc" } });
+  const assetCategoryOptions = assetCategories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    fields: parseFieldSchema(category.fieldSchema),
+  }));
 
   const createContactForClient = createContact.bind(null, client.id);
   const createAssetForClient = createAsset.bind(null, client.id);
@@ -116,7 +128,7 @@ export default async function ClientDetailPage({
           {canManage && (
             <Link href="/clients/new">
               <Button variant="primary">
-                <span className="text-[15px] leading-none">+</span>New client
+                <span className="text-[15px] leading-none">+</span>New {labels.client.toLowerCase()}
               </Button>
             </Link>
           )}
@@ -156,7 +168,7 @@ export default async function ClientDetailPage({
             </Button>
           </form>
           <div className="flex justify-end border-t border-border p-4">
-            <DeleteButton action={deleteClientForClient} label="Delete client" />
+            <DeleteButton action={deleteClientForClient} label={`Delete ${labels.client.toLowerCase()}`} />
           </div>
         </Card>
       )}
@@ -164,7 +176,7 @@ export default async function ClientDetailPage({
       {/* Contacts */}
       <Card>
         <CardHeader>
-          <h2 className="text-[13.5px] font-semibold text-fg">Contacts</h2>
+          <h2 className="text-[13.5px] font-semibold text-fg">{labels.contacts}</h2>
         </CardHeader>
         <table className="w-full text-sm">
           <thead>
@@ -204,7 +216,7 @@ export default async function ClientDetailPage({
             {client.contacts.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-fg-subtle">
-                  No contacts yet.
+                  No {labels.contacts.toLowerCase()} yet.
                 </td>
               </tr>
             )}
@@ -255,13 +267,14 @@ export default async function ClientDetailPage({
               <input type="checkbox" name="portalAccess" /> Portal access
             </label>
             <Button type="submit" variant="primary" className="col-span-2 sm:col-span-4">
-              Add contact
+              Add {labels.contact.toLowerCase()}
             </Button>
           </form>
         )}
       </Card>
 
       {/* Contracts */}
+      {!isEnterprise && (
       <Card>
         <CardHeader>
           <h2 className="text-[13.5px] font-semibold text-fg">Contracts</h2>
@@ -339,6 +352,7 @@ export default async function ClientDetailPage({
           </tbody>
         </table>
       </Card>
+      )}
 
       {/* Assets */}
       <Card>
@@ -356,8 +370,12 @@ export default async function ClientDetailPage({
           </thead>
           <tbody>
             {client.assets.map((asset) => (
-              <tr key={asset.id} className="border-b border-grid last:border-0">
-                <td className="px-4 py-row-py font-medium text-fg">{asset.name}</td>
+              <tr key={asset.id} className="border-b border-grid last:border-0 hover:bg-surface-2">
+                <td className="px-4 py-row-py font-medium text-fg">
+                  <Link href={`/assets/${asset.id}`} className="hover:text-accent">
+                    {asset.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-row-py text-fg-muted">{asset.category.name}</td>
                 <td className="px-4 py-row-py font-mono text-fg-muted">{asset.serialNumber ?? "—"}</td>
                 <td className="px-4 py-row-py text-fg-muted">{asset.isActive ? "Active" : "Inactive"}</td>
@@ -384,17 +402,11 @@ export default async function ClientDetailPage({
               required
               className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-2"
             />
-            <select
-              name="categoryId"
-              defaultValue={assetCategories[0]?.id ?? ""}
-              className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-            >
-              {assetCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            <AssetCategoryFields
+              categories={assetCategoryOptions}
+              categoryLabel="Type"
+              initialCategoryId={assetCategories[0]?.id}
+            />
             <input
               name="serialNumber"
               placeholder="Serial number"

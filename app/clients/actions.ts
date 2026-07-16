@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
+import { parseFieldSchema, extractCustomFieldsFromFormData, validateCustomFieldValues } from "@/lib/asset-fields";
 import type { DeleteActionState } from "@/components/ui/delete-button";
 
 export async function createClient(formData: FormData) {
@@ -16,7 +18,8 @@ export async function createClient(formData: FormData) {
   const parentId = parentIdRaw ? parentIdRaw : null;
 
   if (!name) {
-    throw new Error("Client name is required");
+    const labels = await getOrgLabels();
+    throw new Error(`${labels.client} name is required`);
   }
 
   const client = await prisma.client.create({
@@ -34,7 +37,8 @@ export async function updateClient(id: string, formData: FormData) {
   const isActive = formData.get("isActive") === "on";
 
   if (!name) {
-    throw new Error("Client name is required");
+    const labels = await getOrgLabels();
+    throw new Error(`${labels.client} name is required`);
   }
 
   await prisma.client.update({
@@ -59,7 +63,10 @@ export async function deleteClient(id: string, _prevState: DeleteActionState, _f
     // Ticket.clientId and Contract.clientId are required FKs with no
     // onDelete set (RESTRICT), so either one existing blocks the delete.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
-      return { error: "Cannot delete a client with existing tickets or contracts — deactivate it instead." };
+      const labels = await getOrgLabels();
+      return {
+        error: `Cannot delete a ${labels.client.toLowerCase()} with existing tickets or contracts — deactivate it instead.`,
+      };
     }
     throw error;
   }
@@ -113,8 +120,19 @@ export async function createAsset(clientId: string, formData: FormData) {
     throw new Error("Asset name and category are required");
   }
 
+  const category = await prisma.assetCategory.findUnique({ where: { id: categoryId } });
+  if (!category) {
+    throw new Error("Selected category no longer exists");
+  }
+  const fieldSchema = parseFieldSchema(category.fieldSchema);
+  const customFields = extractCustomFieldsFromFormData(formData, fieldSchema);
+  const fieldError = validateCustomFieldValues(fieldSchema, customFields);
+  if (fieldError) {
+    throw new Error(fieldError);
+  }
+
   await prisma.asset.create({
-    data: { clientId, name, categoryId, serialNumber, notes },
+    data: { clientId, name, categoryId, serialNumber, notes, customFields },
   });
 
   revalidatePath(`/clients/${clientId}`);

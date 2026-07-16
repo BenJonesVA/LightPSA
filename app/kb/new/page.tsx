@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
+import { isEnterpriseMode } from "@/lib/settings";
 import { createArticle } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,6 +8,8 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default async function NewKbArticlePage() {
   await requireStaff();
+
+  const isEnterprise = await isEnterpriseMode();
 
   const [boards, categories] = await Promise.all([
     prisma.board.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -68,7 +71,7 @@ export default async function NewKbArticlePage() {
 
           <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input type="checkbox" name="isInternal" />
-            Internal only (hidden from the client portal)
+            Internal only (hidden from the {isEnterprise ? "employee" : "client"} portal)
           </label>
 
           <div className="flex justify-end gap-3">

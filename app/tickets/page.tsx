@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import type { Prisma, SlaPolicy, TicketPriority, TicketStatus } from "@prisma/client";
 import { getSlaStatus } from "@/lib/sla";
+import { getOrgLabels } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { bulkUpdateTickets } from "./actions";
 import { TicketsTable, type TicketRow } from "./tickets-table";
@@ -23,6 +24,8 @@ export default async function TicketsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   await requireStaff();
+
+  const labels = await getOrgLabels();
 
   const params = await searchParams;
   const boardId = typeof params.boardId === "string" ? params.boardId : undefined;
@@ -132,7 +135,7 @@ export default async function TicketsPage({
         </Link>
       </form>
 
-      <TicketsTable rows={rows} bulkUpdate={bulkUpdateTickets} />
+      <TicketsTable rows={rows} bulkUpdate={bulkUpdateTickets} clientLabel={labels.client} />
     </div>
   );
 }

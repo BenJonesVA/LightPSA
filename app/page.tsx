@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSlaStatus } from "@/lib/sla";
 import { requireStaff } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { Card, CardHeader } from "@/components/ui/card";
 
 const OPEN_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_ON_CLIENT"] as const;
@@ -12,6 +13,8 @@ export default async function DashboardPage() {
   // re-validation, so a deactivated staff account's still-valid-signature
   // session could keep viewing this page indefinitely.
   await requireStaff();
+
+  const labels = await getOrgLabels();
 
   const [openTicketCount, activeClientCount, boards, policies, openTickets] = await Promise.all([
     prisma.ticket.count({ where: { status: { in: [...OPEN_STATUSES] } } }),
@@ -51,7 +54,7 @@ export default async function DashboardPage() {
   const stats = [
     { label: "Open tickets", value: openTicketCount, accent: null },
     { label: "SLA breached", value: breachedCount, accent: breachedCount > 0 ? "red" : null },
-    { label: "Active clients", value: activeClientCount, accent: null },
+    { label: `Active ${labels.clients.toLowerCase()}`, value: activeClientCount, accent: null },
     { label: "Boards", value: boards.length, accent: null },
   ] as const;
 

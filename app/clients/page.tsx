@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { TicketStatus, UserRole } from "@prisma/client";
 import { requireStaff } from "@/lib/rbac";
+import { getOrgLabels } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -14,6 +15,7 @@ const ACTIVE_TICKET_STATUSES = [
 export default async function ClientsPage() {
   const staff = await requireStaff();
   const canManage = staff.role === UserRole.ADMIN || staff.role === UserRole.MANAGER;
+  const labels = await getOrgLabels();
 
   const clients = await prisma.client.findMany({
     orderBy: { name: "asc" },
@@ -31,11 +33,11 @@ export default async function ClientsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-[24px] font-bold tracking-tight text-fg">Clients</h1>
+        <h1 className="text-[24px] font-bold tracking-tight text-fg">{labels.clients}</h1>
         {canManage && (
           <Link href="/clients/new">
             <Button variant="primary">
-              <span className="text-[15px] leading-none">+</span>New client
+              <span className="text-[15px] leading-none">+</span>New {labels.client.toLowerCase()}
             </Button>
           </Link>
         )}
@@ -46,8 +48,8 @@ export default async function ClientsPage() {
           <thead>
             <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
               <th className="px-4 py-2.5">Name</th>
-              <th className="px-4 py-2.5">Parent company</th>
-              <th className="px-4 py-2.5">Contacts</th>
+              <th className="px-4 py-2.5">Parent {labels.client === "Department" ? "department" : "company"}</th>
+              <th className="px-4 py-2.5">{labels.contacts}</th>
               <th className="px-4 py-2.5">Active tickets</th>
               <th className="px-4 py-2.5">Status</th>
             </tr>
@@ -78,7 +80,7 @@ export default async function ClientsPage() {
             {clients.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-fg-subtle">
-                  No clients yet.
+                  No {labels.clients.toLowerCase()} yet.
                 </td>
               </tr>
             ) : null}
