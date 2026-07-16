@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DensityToggle } from "@/components/density-toggle";
 
 const WORKSPACE_LINKS = [
   { href: "/", label: "Dashboard" },
@@ -128,6 +129,7 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-14 flex-none items-center gap-4 border-b border-border bg-surface px-[22px]">
           <div className="ml-auto flex items-center gap-[10px]">
+            <DensityToggle />
             <ThemeToggle />
           </div>
         </div>

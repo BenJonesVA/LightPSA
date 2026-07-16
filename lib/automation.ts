@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { ticketReplyToAddress } from "@/lib/inbound-email";
 import type { AutomationTrigger, Ticket } from "@prisma/client";
 
 type TicketForAutomation = Pick<
@@ -98,6 +99,7 @@ export async function runAutomationRules(
           to: contact.email,
           subject: `Update on your ticket TKT-${ticket.id}: ${ticket.title}`,
           html: `<p>There's an update on your ticket <strong>TKT-${ticket.id}: ${ticket.title}</strong>.</p><p>Current status: ${ticket.status}.</p>`,
+          replyTo: ticketReplyToAddress(ticket.id),
         });
 
         await prisma.ticketComment.create({

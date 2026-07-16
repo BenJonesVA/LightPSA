@@ -24,6 +24,7 @@ export async function sendEmail(params: {
   to: string | string[];
   subject: string;
   html: string;
+  replyTo?: string;
 }): Promise<SendEmailResult> {
   if (!isEmailConfigured()) {
     return { sent: false, reason: "RESEND_API_KEY / EMAIL_FROM not configured" };
@@ -35,6 +36,7 @@ export async function sendEmail(params: {
       to: params.to,
       subject: params.subject,
       html: params.html,
+      replyTo: params.replyTo,
     });
     if (result.error) {
       return { sent: false, reason: result.error.message };
