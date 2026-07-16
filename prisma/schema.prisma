@@ -67,16 +67,6 @@ enum FlatRateUnit {
   PER_USER
 }
 
-enum AssetType {
-  WORKSTATION
-  LAPTOP
-  SERVER
-  NETWORK_DEVICE
-  PRINTER
-  MOBILE_DEVICE
-  OTHER
-}
-
 enum AutomationTrigger {
   TICKET_CREATED
   STATUS_CHANGED
@@ -443,16 +433,32 @@ model ContractRate {
 
 // ── Assets / mini-CMDB ─────────────────────────────────────
 
-model Asset {
-  id           String    @id @default(cuid())
-  clientId     String
-  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+// Admin-manageable, hierarchical — same self-referential pattern as
+// Category (app/admin/categories) — replaces the old fixed AssetType enum.
+model AssetCategory {
+  id       String          @id @default(cuid())
+  name     String
+  parentId String?
+  parent   AssetCategory?  @relation("AssetCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children AssetCategory[] @relation("AssetCategoryHierarchy")
 
-  type         AssetType
+  assets Asset[]
+
+  @@index([parentId])
+}
+
+model Asset {
+  id           String        @id @default(cuid())
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  categoryId   String
+  category     AssetCategory @relation(fields: [categoryId], references: [id])
+
   name         String
   serialNumber String?
-  notes        String?   @db.Text
-  isActive     Boolean   @default(true)
+  notes        String?       @db.Text
+  isActive     Boolean       @default(true)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -460,6 +466,7 @@ model Asset {
   ticketAssets TicketAsset[]
 
   @@index([clientId])
+  @@index([categoryId])
 }
 
 // Join table for per-ticket asset association — a ticket can reference

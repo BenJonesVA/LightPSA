@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, TicketStatus, TicketPriority, TicketSource, WorkType, ExpenseType, ContractType, FlatRateUnit, AssetType } from "@prisma/client";
+import { PrismaClient, UserRole, TicketStatus, TicketPriority, TicketSource, WorkType, ExpenseType, ContractType, FlatRateUnit } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -215,15 +215,25 @@ async function main() {
   });
 
   // ── Assets ───────────────────────────────────────────────
+  // Default categories are seeded by the asset_categories migration itself
+  // (one per the old fixed AssetType enum value) — look them up by name
+  // rather than hardcoding the migration's ids here.
+  const assetCategories = await prisma.assetCategory.findMany();
+  const assetCategoryId = (name: string) => {
+    const category = assetCategories.find((c) => c.name === name);
+    if (!category) throw new Error(`Asset category "${name}" not found — did migrations run?`);
+    return category.id;
+  };
+
   const [acmeServer, acmeFirewall, brightPathWorkstation] = await Promise.all([
     prisma.asset.create({
-      data: { clientId: acme.id, type: AssetType.SERVER, name: "ACME-FS01 (File Server)", serialNumber: "SN-88213" },
+      data: { clientId: acme.id, categoryId: assetCategoryId("Server"), name: "ACME-FS01 (File Server)", serialNumber: "SN-88213" },
     }),
     prisma.asset.create({
-      data: { clientId: acme.id, type: AssetType.NETWORK_DEVICE, name: "Acme HQ Firewall", serialNumber: "SN-77102" },
+      data: { clientId: acme.id, categoryId: assetCategoryId("Network Device"), name: "Acme HQ Firewall", serialNumber: "SN-77102" },
     }),
     prisma.asset.create({
-      data: { clientId: brightPath.id, type: AssetType.WORKSTATION, name: "Front Desk PC", serialNumber: "SN-55901" },
+      data: { clientId: brightPath.id, categoryId: assetCategoryId("Workstation"), name: "Front Desk PC", serialNumber: "SN-55901" },
     }),
   ]);
 

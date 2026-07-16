@@ -16,7 +16,7 @@ export default async function AssetDetailPage({
 
   const asset = await prisma.asset.findUnique({
     where: { id },
-    include: { client: true },
+    include: { client: true, category: true },
   });
 
   if (!asset) {
@@ -57,7 +57,7 @@ export default async function AssetDetailPage({
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 text-sm">
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">Type</dt>
-            <dd className="mt-0.5 text-fg">{asset.type.replace(/_/g, " ")}</dd>
+            <dd className="mt-0.5 text-fg">{asset.category.name}</dd>
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">Serial number</dt>

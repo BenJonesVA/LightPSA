@@ -7,7 +7,7 @@ export default async function AssetsPage() {
   await requireStaff();
 
   const assets = await prisma.asset.findMany({
-    include: { client: true },
+    include: { client: true, category: true },
     orderBy: { name: "asc" },
   });
 
@@ -41,7 +41,7 @@ export default async function AssetsPage() {
                       {asset.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-row-py text-fg-muted">{asset.type.replace(/_/g, " ")}</td>
+                  <td className="px-4 py-row-py text-fg-muted">{asset.category.name}</td>
                   <td className="px-4 py-row-py">
                     <Link href={`/clients/${asset.clientId}`} className="text-accent hover:underline">
                       {asset.client.name}

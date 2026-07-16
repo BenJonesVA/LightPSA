@@ -12,16 +12,6 @@ import { Card, CardHeader } from "@/components/ui/card";
 
 const PERIOD_DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
-const ASSET_TYPE_OPTIONS = [
-  "WORKSTATION",
-  "LAPTOP",
-  "SERVER",
-  "NETWORK_DEVICE",
-  "PRINTER",
-  "MOBILE_DEVICE",
-  "OTHER",
-] as const;
-
 const CONTRACT_TYPE_STYLES: Record<string, { fg: string; bg: string }> = {
   RETAINER: { fg: "text-blue", bg: "bg-blue-bg" },
   MSP_FLAT_RATE: { fg: "text-violet", bg: "bg-violet-bg" },
@@ -44,7 +34,7 @@ export default async function ClientDetailPage({
       parent: { select: { id: true, name: true } },
       contacts: { orderBy: { createdAt: "asc" } },
       contracts: { orderBy: { createdAt: "desc" } },
-      assets: { orderBy: { createdAt: "asc" } },
+      assets: { include: { category: true }, orderBy: { createdAt: "asc" } },
       tickets: {
         orderBy: { createdAt: "desc" },
         take: 10,
@@ -89,6 +79,8 @@ export default async function ClientDetailPage({
       })
     )
   );
+
+  const assetCategories = await prisma.assetCategory.findMany({ orderBy: { name: "asc" } });
 
   const createContactForClient = createContact.bind(null, client.id);
   const createAssetForClient = createAsset.bind(null, client.id);
@@ -366,7 +358,7 @@ export default async function ClientDetailPage({
             {client.assets.map((asset) => (
               <tr key={asset.id} className="border-b border-grid last:border-0">
                 <td className="px-4 py-row-py font-medium text-fg">{asset.name}</td>
-                <td className="px-4 py-row-py text-fg-muted">{asset.type.replace(/_/g, " ")}</td>
+                <td className="px-4 py-row-py text-fg-muted">{asset.category.name}</td>
                 <td className="px-4 py-row-py font-mono text-fg-muted">{asset.serialNumber ?? "—"}</td>
                 <td className="px-4 py-row-py text-fg-muted">{asset.isActive ? "Active" : "Inactive"}</td>
               </tr>
@@ -393,13 +385,13 @@ export default async function ClientDetailPage({
               className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg sm:col-span-2"
             />
             <select
-              name="type"
-              defaultValue="WORKSTATION"
+              name="categoryId"
+              defaultValue={assetCategories[0]?.id ?? ""}
               className="col-span-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
             >
-              {ASSET_TYPE_OPTIONS.map((type) => (
-                <option key={type} value={type}>
-                  {type.replace(/_/g, " ")}
+              {assetCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
                 </option>
               ))}
             </select>

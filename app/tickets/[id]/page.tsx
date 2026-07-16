@@ -62,7 +62,7 @@ export default async function TicketDetailPage({
       timeLogs: true,
       expenses: true,
       csatResponse: true,
-      ticketAssets: { include: { asset: true }, orderBy: { createdAt: "asc" } },
+      ticketAssets: { include: { asset: { include: { category: true } } }, orderBy: { createdAt: "asc" } },
       scheduledVisits: { include: { technician: { select: { name: true } } }, orderBy: { startTime: "asc" } },
       attachments: {
         include: { uploadedByUser: { select: { name: true } }, uploadedByContact: { select: { firstName: true, lastName: true } } },
@@ -81,6 +81,7 @@ export default async function TicketDetailPage({
     }),
     prisma.asset.findMany({
       where: { clientId: ticket.clientId, isActive: true },
+      include: { category: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -504,7 +505,7 @@ export default async function TicketDetailPage({
                     <div className="min-w-0">
                       <div className="truncate font-medium text-fg">{ta.asset.name}</div>
                       <div className="text-[11px] text-fg-subtle">
-                        {ta.asset.type.replace(/_/g, " ")}
+                        {ta.asset.category.name}
                         {ta.asset.serialNumber ? ` · ${ta.asset.serialNumber}` : ""}
                       </div>
                     </div>
@@ -528,7 +529,7 @@ export default async function TicketDetailPage({
                   <option value="">Link an asset…</option>
                   {linkableAssets.map((asset) => (
                     <option key={asset.id} value={asset.id}>
-                      {asset.name} ({asset.type.replace(/_/g, " ")})
+                      {asset.name} ({asset.category.name})
                     </option>
                   ))}
                 </select>

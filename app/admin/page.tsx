@@ -15,6 +15,11 @@ const SECTIONS: { href: string; label: string; description: string; adminOnly?: 
     description: "Ticket taxonomy used on tickets and knowledge base articles.",
   },
   {
+    href: "/admin/asset-categories",
+    label: "Asset Categories",
+    description: "Asset taxonomy used across clients' assets.",
+  },
+  {
     href: "/admin/canned-responses",
     label: "Canned Responses",
     description: "Reusable reply templates available when responding to tickets.",
