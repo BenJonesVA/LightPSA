@@ -1,0 +1,35 @@
+# Prod overlay for a self-hosted VM. Usage:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Passing explicit -f flags like this stops Compose from also auto-loading
+# docker-compose.override.yml (the dev-only file that republishes 5432/3131
+# and starts Adminer) — see docker-compose.yml's top comment. Everything
+# below only adds Nginx Proxy Manager in front of `app`, terminating TLS via
+# its built-in Let's Encrypt support. The app container itself still isn't
+# published to the host directly; NPM is the only thing on 80/443.
+#
+# NPM has no Caddyfile-equivalent to check in — the proxy host (domain →
+# app:3131) and cert request are configured once through its own admin UI
+# at :81 after first boot (see plan.md's Deployment section for the exact
+# steps). Default login is admin@example.com / changeme — change both
+# immediately on first login, and consider closing off :81 (firewall to
+# your IP, or an SSH tunnel) once the proxy host is set up, since it's an
+# unauthenticated attack surface otherwise.
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - psa_npm_data:/data
+      - psa_npm_letsencrypt:/etc/letsencrypt
+    depends_on:
+      - app
+
+volumes:
+  psa_npm_data:
+  psa_npm_letsencrypt:

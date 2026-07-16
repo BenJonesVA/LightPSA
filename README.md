@@ -53,6 +53,22 @@ ADMIN and MANAGER can access Billing, Automation, SLA Policies, and Reports; TEC
 
 Portal contacts can only ever see their own client's tickets and KB articles marked external — never another client's data, and never internal-only content, even if they know the exact URL/id (enforced at the database query level, not just hidden in the UI).
 
+## Deploying to a self-hosted VM
+
+`docker compose up -d` (above) is unchanged for local dev — it still auto-loads `docker-compose.override.yml`, which is what publishes Postgres/the app's ports and starts Adminer.
+
+A real deployment instead runs `docker-compose.yml` + `docker-compose.prod.yml` with **explicit `-f` flags**, which skips that auto-load and adds [Nginx Proxy Manager](https://nginxproxymanager.com/) in front of the app for TLS:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Then, one-time, through NPM's own admin UI at `http://<vm-ip>:81` (no default credentials on first boot — you create the admin account there): add a proxy host for your real domain pointing at `app:3131`, and request its Let's Encrypt cert. Set `AUTH_TRUST_HOST=true` and real `POSTGRES_*` credentials in `.env` before starting — see `.env.example` for what's required.
+
+To try this whole path locally first without touching your dev stack, run `./scripts/test-prod-stack.sh up` — it brings up the identical two-file stack under a separate, isolated Compose project so it can run alongside the everyday dev containers. `./scripts/test-prod-stack.sh down` tears it back down. Real TLS can't be tested this way (Let's Encrypt needs a public domain), but the proxy wiring itself can — add a proxy host for `localhost` with SSL off and visit `http://localhost`.
+
+For nightly Postgres backups, see `scripts/backup-db.sh` (meant to be driven by a host cron job) and `scripts/restore-db.sh`.
+
 ## Notes
 
 - These credentials and the seed data they log into (`prisma/seed.ts`) are for local development and demos only — never reuse this password scheme anywhere real accounts exist.

@@ -1,28 +1,25 @@
 services:
+  # No host ports published here by default — this file alone is what a
+  # production host runs. Local dev gets 5432/3131/adminer back via
+  # docker-compose.override.yml, which `docker compose up` auto-loads
+  # whenever you *don't* pass explicit -f flags (see README). A prod deploy
+  # always passes explicit -f flags (see plan.md's Deployment section),
+  # which skips that auto-load — so the override file being present in the
+  # repo never leaks dev-only exposure onto a VM.
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: psa
-      POSTGRES_PASSWORD: psa
-      POSTGRES_DB: psa
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-psa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-psa}
+      POSTGRES_DB: ${POSTGRES_DB:-psa}
     volumes:
       - psa_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U psa"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-psa}"]
       interval: 5s
       timeout: 5s
       retries: 10
-
-  adminer:
-    image: adminer:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
 
   # Runs once, applies any pending migrations, then exits. Reuses the
   # `builder` stage (which still has the full Prisma CLI + migrations
@@ -37,7 +34,7 @@ services:
       target: builder
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://psa:psa@postgres:5432/psa?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-psa}:${POSTGRES_PASSWORD:-psa}@postgres:5432/${POSTGRES_DB:-psa}?schema=public
     command: ["npx", "prisma", "migrate", "deploy"]
     restart: "no"
     depends_on:
@@ -51,9 +48,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://psa:psa@postgres:5432/psa?schema=public
-    ports:
-      - "3131:3131"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-psa}:${POSTGRES_PASSWORD:-psa}@postgres:5432/${POSTGRES_DB:-psa}?schema=public
     volumes:
       - psa_uploads_data:/app/uploads
     depends_on:
