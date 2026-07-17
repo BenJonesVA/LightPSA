@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ContractType, UserRole } from "@prisma/client";
+import { ContractType, Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
 import { getSettings, orgLabels } from "@/lib/settings";
 import { parseFieldSchema } from "@/lib/asset-fields";
 import { createContact, createAsset, updateClient, deleteClient } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,9 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const staff = await requireStaff();
-  const canManage = staff.role === UserRole.ADMIN || staff.role === UserRole.MANAGER;
+  const isManagerRole = staff.role === UserRole.ADMIN || staff.role === UserRole.MANAGER;
+  const canManage = isManagerRole || (staff.permissions?.includes(Permission.MANAGE_CLIENTS) ?? false);
+  const canManageAssets = isManagerRole || (staff.permissions?.includes(Permission.MANAGE_ASSETS) ?? false);
 
   const settings = await getSettings();
   const isEnterprise = settings.orgMode === "ENTERPRISE";
@@ -140,7 +143,7 @@ export default async function ClientDetailPage({
           <CardHeader>
             <h2 className="text-[13.5px] font-semibold text-fg">Details</h2>
           </CardHeader>
-          <form action={updateClientForClient} className="grid grid-cols-2 gap-3 p-4">
+          <ActionForm action={updateClientForClient} className="grid grid-cols-2 gap-3 p-4">
             <input
               name="name"
               placeholder="Name"
@@ -166,7 +169,7 @@ export default async function ClientDetailPage({
             <Button type="submit" variant="primary" className="col-span-2 sm:col-span-1">
               Save
             </Button>
-          </form>
+          </ActionForm>
           <div className="flex justify-end border-t border-border p-4">
             <DeleteButton action={deleteClientForClient} label={`Delete ${labels.client.toLowerCase()}`} />
           </div>
@@ -224,7 +227,7 @@ export default async function ClientDetailPage({
         </table>
 
         {canManage && (
-          <form
+          <ActionForm
             action={createContactForClient}
             className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-4"
           >
@@ -269,7 +272,7 @@ export default async function ClientDetailPage({
             <Button type="submit" variant="primary" className="col-span-2 sm:col-span-4">
               Add {labels.contact.toLowerCase()}
             </Button>
-          </form>
+          </ActionForm>
         )}
       </Card>
 
@@ -391,8 +394,8 @@ export default async function ClientDetailPage({
           </tbody>
         </table>
 
-        {canManage && (
-          <form
+        {canManageAssets && (
+          <ActionForm
             action={createAssetForClient}
             className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-4"
           >
@@ -420,7 +423,7 @@ export default async function ClientDetailPage({
             <Button type="submit" variant="primary" className="col-span-1">
               Add asset
             </Button>
-          </form>
+          </ActionForm>
         )}
       </Card>
 

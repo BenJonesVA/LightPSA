@@ -1,20 +1,21 @@
-import { UserRole } from "@prisma/client";
-import { requireRole } from "@/lib/rbac";
+import { Permission, UserRole } from "@prisma/client";
+import { requirePermission } from "@/lib/rbac";
 import { createUser } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 const ROLE_OPTIONS = [UserRole.ADMIN, UserRole.MANAGER, UserRole.TECHNICIAN] as const;
 
 export default async function NewUserPage() {
-  await requireRole(UserRole.ADMIN);
+  await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
 
   return (
     <div className="mx-auto max-w-xl">
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New user</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createUser} className="space-y-4">
+        <ActionForm action={createUser} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Name</label>
             <input
@@ -79,7 +80,7 @@ export default async function NewUserPage() {
               Create user
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

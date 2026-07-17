@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { isEnterpriseMode } from "@/lib/settings";
 import { createArticle } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 export default async function NewKbArticlePage() {
   await requireStaff();
@@ -21,7 +22,7 @@ export default async function NewKbArticlePage() {
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New KB article</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createArticle} className="space-y-4">
+        <ActionForm action={createArticle} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Title</label>
             <input
@@ -34,7 +35,7 @@ export default async function NewKbArticlePage() {
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Body</label>
-            <RichTextEditor name="body" defaultValue="" />
+            <MarkdownEditor name="body" defaultValue="" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -84,7 +85,7 @@ export default async function NewKbArticlePage() {
               Create article
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

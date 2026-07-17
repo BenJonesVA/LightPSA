@@ -6,9 +6,9 @@ import { revalidatePath } from "next/cache";
 import { redirect, notFound } from "next/navigation";
 import type { TicketPriority } from "@prisma/client";
 import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
-import { escapePlainTextToHtml, sanitizeRichText } from "@/lib/sanitize-html";
+import type { FormActionState } from "@/components/ui/action-form";
 
-export async function createPortalTicket(formData: FormData) {
+export async function createPortalTicket(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
   const user = await requireClientSession();
 
   const title = String(formData.get("title") ?? "").trim();
@@ -16,7 +16,7 @@ export async function createPortalTicket(formData: FormData) {
   const priority = String(formData.get("priority") ?? "MEDIUM") as TicketPriority;
 
   if (!title) {
-    throw new Error("Title is required.");
+    return { error: "Title is required." };
   }
 
   // The submitting board is chosen server-side — a portal contact must never
@@ -29,14 +29,10 @@ export async function createPortalTicket(formData: FormData) {
     throw new Error("No board is available to file this ticket against.");
   }
 
-  // Plain-textarea submission: escape to inert HTML first (belt), then run
-  // through the same sanitizer every other write path uses (suspenders).
-  const descriptionHtml = sanitizeRichText(escapePlainTextToHtml(description));
-
   const ticket = await prisma.ticket.create({
     data: {
       title,
-      description: descriptionHtml,
+      description,
       priority,
       source: "PORTAL",
       boardId: board.id,
@@ -78,7 +74,7 @@ export async function addPortalComment(ticketId: number, formData: FormData) {
   redirect(`/portal/tickets/${ticketId}`);
 }
 
-export async function uploadPortalAttachment(ticketId: number, formData: FormData) {
+export async function uploadPortalAttachment(ticketId: number, formData: FormData): Promise<FormActionState> {
   const user = await requireClientSession();
 
   // Re-verify ownership here too, same as addPortalComment above — a page
@@ -91,9 +87,9 @@ export async function uploadPortalAttachment(ticketId: number, formData: FormDat
   if (!ticket) notFound();
 
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return;
+  if (!(file instanceof File) || file.size === 0) return null;
   if (file.size > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`File exceeds the ${MAX_ATTACHMENT_MB}MB limit.`);
+    return { error: `File exceeds the ${MAX_ATTACHMENT_MB}MB limit.` };
   }
 
   const attachment = await prisma.attachment.create({
@@ -110,4 +106,5 @@ export async function uploadPortalAttachment(ticketId: number, formData: FormDat
   await saveAttachmentFile(attachment.id, Buffer.from(await file.arrayBuffer()));
 
   revalidatePath(`/portal/tickets/${ticketId}`);
+  return null;
 }

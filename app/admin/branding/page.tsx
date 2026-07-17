@@ -1,12 +1,13 @@
-import { UserRole } from "@prisma/client";
-import { requireRole } from "@/lib/rbac";
+import { Permission, UserRole } from "@prisma/client";
+import { requirePermission } from "@/lib/rbac";
 import { getSettings } from "@/lib/settings";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { updateBranding } from "./actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 export default async function BrandingAdminPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_BRANDING, UserRole.ADMIN, UserRole.MANAGER);
 
   const settings = await getSettings();
 
@@ -20,7 +21,7 @@ export default async function BrandingAdminPage() {
       </div>
 
       <Card className="p-5">
-        <form action={updateBranding} encType="multipart/form-data" className="flex flex-col gap-4">
+        <ActionForm action={updateBranding} encType="multipart/form-data" className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-xl border border-border-strong bg-surface-2">
               {settings.logoMimeType ? (
@@ -113,7 +114,7 @@ export default async function BrandingAdminPage() {
               Save
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

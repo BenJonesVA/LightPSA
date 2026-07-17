@@ -1,11 +1,12 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { createAutomationRule } from "@/app/automation/actions";
 import { IdleMinutesField } from "@/app/automation/new/idle-minutes-field";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ActionForm } from "@/components/ui/action-form";
 
 const INPUT_CLASS =
   "mt-1.5 block w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-[13.5px] text-fg focus:outline-none focus:ring-2 focus:ring-focus";
@@ -13,7 +14,7 @@ const LABEL_CLASS = "block text-[12.5px] font-medium text-fg-muted";
 const SUB_LABEL_CLASS = "block text-[11.5px] font-medium text-fg-subtle";
 
 export default async function NewAutomationRulePage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_AUTOMATION, UserRole.ADMIN, UserRole.MANAGER);
 
   const labels = await getOrgLabels();
 
@@ -28,7 +29,7 @@ export default async function NewAutomationRulePage() {
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New Automation Rule</h1>
 
       <Card className="p-5">
-        <form action={createAutomationRule} className="flex flex-col gap-6">
+        <ActionForm action={createAutomationRule} className="flex flex-col gap-6">
           <div>
             <label htmlFor="name" className={LABEL_CLASS}>
               Name
@@ -159,7 +160,7 @@ export default async function NewAutomationRulePage() {
               Create Rule
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

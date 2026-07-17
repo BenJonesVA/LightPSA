@@ -1,10 +1,11 @@
 "use server";
 
-import { UserRole, AutomationTrigger, AutomationAction, TicketPriority, TicketStatus } from "@prisma/client";
+import { UserRole, AutomationTrigger, AutomationAction, Permission, TicketPriority, TicketStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
+import type { FormActionState } from "@/components/ui/action-form";
 
 const CREATABLE_TRIGGERS: AutomationTrigger[] = [
   AutomationTrigger.TICKET_CREATED,
@@ -13,15 +14,15 @@ const CREATABLE_TRIGGERS: AutomationTrigger[] = [
   AutomationTrigger.IDLE_TIME_EXCEEDED,
 ];
 
-export async function createAutomationRule(formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createAutomationRule(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_AUTOMATION, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const triggerTypeRaw = String(formData.get("triggerType") ?? "");
   const actionTypeRaw = String(formData.get("actionType") ?? "");
 
   if (!name) {
-    throw new Error("Rule name is required");
+    return { error: "Rule name is required" };
   }
 
   // Server-side re-check: IDLE_TIME_EXCEEDED has no scheduler to fire it yet.
@@ -52,7 +53,7 @@ export async function createAutomationRule(formData: FormData) {
     const idleMinutesRaw = String(formData.get("conditionIdleMinutes") ?? "").trim();
     const parsed = Number(idleMinutesRaw);
     if (!idleMinutesRaw || !Number.isInteger(parsed) || parsed <= 0) {
-      throw new Error("Idle minutes must be a positive whole number for an idle-time rule");
+      return { error: "Idle minutes must be a positive whole number for an idle-time rule" };
     }
     conditionIdleMinutes = parsed;
   }
@@ -82,7 +83,7 @@ export async function createAutomationRule(formData: FormData) {
 }
 
 export async function toggleAutomationRule(id: string, isActive: boolean) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_AUTOMATION, UserRole.ADMIN, UserRole.MANAGER);
 
   await prisma.automationRule.update({
     where: { id },

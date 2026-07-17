@@ -1,15 +1,16 @@
 "use server";
 
-import { UserRole } from "@prisma/client";
-import { requireRole } from "@/lib/rbac";
+import { Permission, UserRole } from "@prisma/client";
+import { requirePermission } from "@/lib/rbac";
 import { updateSettings } from "@/lib/settings";
 import { saveLogoFile, MAX_LOGO_BYTES, MAX_LOGO_MB } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
+import type { FormActionState } from "@/components/ui/action-form";
 
 const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
 
-export async function updateBranding(formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function updateBranding(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_BRANDING, UserRole.ADMIN, UserRole.MANAGER);
 
   const companyName = String(formData.get("companyName") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
@@ -17,7 +18,7 @@ export async function updateBranding(formData: FormData) {
   const orgMode = orgModeRaw === "ENTERPRISE" ? "ENTERPRISE" : "MSP";
 
   if (!companyName) {
-    throw new Error("Company name is required");
+    return { error: "Company name is required" };
   }
 
   const logo = formData.get("logo");
@@ -25,10 +26,10 @@ export async function updateBranding(formData: FormData) {
 
   if (logo instanceof File && logo.size > 0) {
     if (logo.size > MAX_LOGO_BYTES) {
-      throw new Error(`Logo exceeds the ${MAX_LOGO_MB}MB limit.`);
+      return { error: `Logo exceeds the ${MAX_LOGO_MB}MB limit.` };
     }
     if (!ALLOWED_LOGO_TYPES.includes(logo.type)) {
-      throw new Error("Logo must be a PNG, JPEG, WebP, or SVG image.");
+      return { error: "Logo must be a PNG, JPEG, WebP, or SVG image." };
     }
     await saveLogoFile(Buffer.from(await logo.arrayBuffer()));
     logoMimeType = logo.type;
@@ -42,4 +43,5 @@ export async function updateBranding(formData: FormData) {
   });
 
   revalidatePath("/", "layout");
+  return null;
 }

@@ -1,42 +1,44 @@
 "use server";
 
-import { Prisma, UserRole } from "@prisma/client";
+import { Permission, Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import type { DeleteActionState } from "@/components/ui/delete-button";
+import type { FormActionState } from "@/components/ui/action-form";
 import { ASSET_FIELD_TYPES, isValidFieldKey } from "@/lib/asset-fields";
 
-export async function createAssetCategory(formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createAssetCategory(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const parentIdRaw = String(formData.get("parentId") ?? "").trim();
   const parentId = parentIdRaw ? parentIdRaw : null;
 
   if (!name) {
-    throw new Error("Category name is required");
+    return { error: "Category name is required" };
   }
 
   await prisma.assetCategory.create({ data: { name, parentId } });
 
   revalidatePath("/admin/asset-categories");
+  return null;
 }
 
-export async function renameAssetCategory(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function renameAssetCategory(id: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const parentIdRaw = String(formData.get("parentId") ?? "").trim();
   const parentId = parentIdRaw ? parentIdRaw : null;
 
   if (!name) {
-    throw new Error("Category name is required");
+    return { error: "Category name is required" };
   }
 
   if (parentId) {
     if (parentId === id) {
-      throw new Error("A category cannot be its own parent");
+      return { error: "A category cannot be its own parent" };
     }
 
     const categories = await prisma.assetCategory.findMany({ select: { id: true, parentId: true } });
@@ -47,7 +49,7 @@ export async function renameAssetCategory(id: string, formData: FormData) {
     let cursor: string | null = parentId;
     while (cursor) {
       if (cursor === id) {
-        throw new Error("Cannot move a category under one of its own descendants");
+        return { error: "Cannot move a category under one of its own descendants" };
       }
       cursor = parentById.get(cursor) ?? null;
     }
@@ -56,10 +58,11 @@ export async function renameAssetCategory(id: string, formData: FormData) {
   await prisma.assetCategory.update({ where: { id }, data: { name, parentId } });
 
   revalidatePath("/admin/asset-categories");
+  return null;
 }
 
 export async function updateAssetCategoryFieldSchema(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   let parsed: unknown;
   try {
@@ -120,7 +123,7 @@ export async function deleteAssetCategory(
   _prevState: DeleteActionState,
   _formData: FormData
 ): Promise<DeleteActionState> {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   try {
     await prisma.assetCategory.delete({ where: { id } });

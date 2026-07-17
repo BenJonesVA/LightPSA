@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { parseFieldSchema } from "@/lib/asset-fields";
 import { Card } from "@/components/ui/card";
 import { updateAssetCategoryFieldSchema } from "../../actions";
@@ -13,7 +13,7 @@ export default async function AssetCategoryFieldsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   const { id } = await params;
 

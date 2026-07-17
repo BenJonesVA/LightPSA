@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { isEnterpriseMode } from "@/lib/settings";
 import { updateArticle } from "../../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 export default async function EditKbArticlePage({
   params,
@@ -31,7 +32,7 @@ export default async function EditKbArticlePage({
       <h1 className="text-[24px] font-bold tracking-tight text-fg">Edit KB article</h1>
 
       <Card className="mt-6 p-6">
-        <form action={submit} className="space-y-4">
+        <ActionForm action={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Title</label>
             <input
@@ -45,7 +46,7 @@ export default async function EditKbArticlePage({
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Body</label>
-            <RichTextEditor name="body" defaultValue={article.body} />
+            <MarkdownEditor name="body" defaultValue={article.body} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -97,7 +98,7 @@ export default async function EditKbArticlePage({
               Save changes
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

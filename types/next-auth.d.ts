@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { Permission, UserRole } from "@prisma/client";
 import type { DefaultSession } from "next-auth";
 import "next-auth";
 import "next-auth/jwt";
@@ -10,6 +10,7 @@ declare module "next-auth" {
     actorType: ActorType;
     role?: UserRole;
     clientId?: string;
+    permissions?: Permission[];
   }
 
   interface Session {
@@ -18,6 +19,7 @@ declare module "next-auth" {
       actorType: ActorType;
       role?: UserRole;
       clientId?: string;
+      permissions?: Permission[];
     } & DefaultSession["user"];
   }
 }
@@ -27,5 +29,6 @@ declare module "next-auth/jwt" {
     actorType: ActorType;
     role?: UserRole;
     clientId?: string;
+    permissions?: Permission[];
   }
 }

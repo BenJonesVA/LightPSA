@@ -1,6 +1,6 @@
-import { UserRole, ContractType, type TicketPriority } from "@prisma/client";
+import { UserRole, ContractType, Permission, type TicketPriority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { getSlaStatus } from "@/lib/sla";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
 import { formatDuration } from "@/lib/format";
@@ -23,7 +23,7 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
 };
 
 export default async function ReportsPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.VIEW_REPORTS, UserRole.ADMIN, UserRole.MANAGER);
 
   const isEnterprise = await isEnterpriseMode();
 

@@ -25,7 +25,8 @@ import { AutoRefresh } from "./auto-refresh";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { RichText } from "@/components/ui/rich-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import { ActionForm, type FormActionState } from "@/components/ui/action-form";
 import { formatBytes } from "@/lib/format";
 
 const STATUS_OPTIONS: TicketStatus[] = [
@@ -145,9 +146,9 @@ export default async function TicketDetailPage({
     await linkAsset(ticketId, formData);
   }
 
-  async function submitUploadAttachment(formData: FormData) {
+  async function submitUploadAttachment(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
     "use server";
-    await uploadAttachment(ticketId, formData);
+    return uploadAttachment(ticketId, formData);
   }
 
   return (
@@ -177,7 +178,7 @@ export default async function TicketDetailPage({
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
               Description
             </h2>
-            <RichText html={ticket.description} className="mt-2 text-[13.5px] text-fg" />
+            <MarkdownContent markdown={ticket.description} className="mt-2 text-[13.5px] text-fg" />
           </Card>
 
           <div className={`grid grid-cols-1 gap-4 ${showExpenses ? "sm:grid-cols-2" : ""}`}>
@@ -576,7 +577,7 @@ export default async function TicketDetailPage({
                 })}
               </ul>
             )}
-            <form
+            <ActionForm
               action={submitUploadAttachment}
               encType="multipart/form-data"
               className="mt-3 flex flex-col gap-2 border-t border-border pt-3"
@@ -597,7 +598,7 @@ export default async function TicketDetailPage({
                 </Button>
               </div>
               <p className="text-[10.5px] text-fg-subtle">Max {MAX_ATTACHMENT_MB}MB.</p>
-            </form>
+            </ActionForm>
           </Card>
 
           <Card className="p-[18px]">

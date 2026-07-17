@@ -24,15 +24,22 @@ production docker deployment (port 3131, not just dev): all three
 previously-500-crashing guarded deletes now return 200 with the record
 preserved; the success (empty/no-history) delete path still works.
 
-**Not yet fixed, same root cause:** every other validation `throw new
-Error(...)` in this codebase (`createBoard`, `updateBoard`, `createClient`,
-`updateClient`, `createUser`, `updateUser`'s last-admin guard, category/
-canned-response/branding validation, etc.) has the identical latent bug —
-just less likely to be hit than a delete guard, since real data usually
-already exists. Worth a systemic pass converting the common ones to the same
-return-value + `useActionState` pattern, prioritized by how likely each is to
-actually fire in normal use (the last-admin guard on `updateUser` is probably
-next most likely).
+**Fixed, same root cause:** every other *reachable, user-facing* validation
+`throw new Error(...)` across the codebase — duplicate email/last-admin guard
+on users, required-name fields on boards/clients/categories/asset-categories/
+KB/tickets/automation rules/canned responses, password length, schedule
+end-before-start, SLA positive-minutes, branding logo size/type, attachment
+file-size limits (staff + portal) — now returns `{ error }` and is read via
+a new shared `components/ui/action-form.tsx` (the create/update counterpart
+to `delete-button.tsx`), so the message shows inline with the form instead of
+redirecting to the generic `app/error.tsx` crash page in production. See
+`plan.md`'s "Return-value error handling for user-facing validation
+(systemic pass)" entry for the full file list and what was deliberately left
+as a throw (select-constrained values, races, and the asset-category custom
+field-schema builder, which needs a bigger refactor of its own client
+component to wire in). `tsc --noEmit` and `npm run build` both clean.
+**Not verified:** no browser available to click through a real duplicate-email
+or blank-name submission and confirm the inline banner + retained input.
 
 ## Quick wins
 
@@ -168,45 +175,49 @@ next most likely).
   build` both clean. **Not verified:** no browser available, so grid layout/
   spacing is logic-verified only, not visually confirmed.
 
-- [x] **WYSIWYG editor for the KB body and ticket description.** Added a Tiptap
-  editor (`components/ui/rich-text-editor.tsx`, bridged into existing plain
-  Server Action forms via a hidden input synced on `onUpdate`) for KB article
-  body (`app/kb/new`, `app/kb/[id]/edit`) and ticket description
-  (`app/tickets/new`). All rendering of stored bodies now goes through
-  `components/ui/rich-text.tsx` (`dangerouslySetInnerHTML` on already-
-  sanitized HTML) in place of the old `whitespace-pre-wrap` plain text — staff
-  and portal KB views, staff and portal ticket detail views.
-  **Sanitization (the hard requirement):** `lib/sanitize-html.ts` exports
-  `sanitizeRichText()`, a single allowlist (`p, br, h1-h3, blockquote, ul, ol,
-  li, pre, code, strong, em, u, s, a[href]`, schemes restricted to
-  `http`/`https`/`mailto`, no `class`/`style`/event attributes) used by every
-  save action — `createArticle`/`updateArticle`, `createTicket`, and the
-  client-portal `createPortalTicket` (which stays a plain `<textarea>`, no
-  Tiptap, but its input is escaped to safe HTML via `escapePlainTextToHtml`
-  and still run through the same sanitizer for defense in depth). This is the
-  server-side boundary — sanitizing only matters here, not client-side, since
-  a raw POST to any of these Server Actions bypasses Tiptap entirely (this
-  session literally exercised that exact bypass technique against other
-  actions earlier). Verified the allowlist empirically (script/event-handler/
-  class/style/iframe/javascript: all stripped; http/https/mailto survive;
-  empty string handled). `tsc --noEmit` and `npm run build` both clean.
-  **Not verified:** no browser available — the editor's actual UI, hydration
-  (`immediatelyRender: false` is set, the standard Tiptap/Next App Router
-  fix, but unconfirmed live), and a real save→render round trip all need a
+- [x] **Rich editing for the KB body and ticket description — now markdown, not
+  WYSIWYG.** Originally shipped as a Tiptap WYSIWYG editor storing sanitized
+  HTML; replaced with plain markdown per a later request (see `plan.md`'s
+  "Markdown editing (replaces the Tiptap WYSIWYG editor)" entry for the full
+  writeup). `components/ui/markdown-editor.tsx` (Write/Preview tabs + a
+  formatting toolbar over a plain `<textarea>`) for KB article body
+  (`app/kb/new`, `app/kb/[id]/edit`) and ticket description
+  (`app/tickets/new`); `components/ui/markdown-content.tsx`
+  (`react-markdown` + `remark-gfm` + `remark-breaks`) renders it everywhere —
+  staff and portal KB views, staff and portal ticket detail views, and the
+  editor's own Preview tab (one render path, not two). `KbArticle.body`/
+  `Ticket.description` now store raw markdown source instead of sanitized
+  HTML; the sanitization boundary moved from a write-time HTML allowlist
+  (`lib/sanitize-html.ts`, now deleted) to render-time (no `rehype-raw`, plus
+  `rehype-sanitize` restricting link/image URL schemes) — verified against
+  script tags, `javascript:` links, and the real pre-existing seeded content
+  (see `plan.md` for the specifics). `tsc --noEmit` and `npm run build` both
+  clean. **Not verified:** no browser available — the editor's Write/Preview
+  toggle, toolbar buttons, and a real save→render round trip all need a
   manual click-through.
 
-- [ ] **Dashboard redesign to match the original Claude Design mock.** `plan.md`
-  references a Design project (`2c0ced40-c7a3-454a-8606-231613c330dd`, file
-  `LightPSA.dc.html`) that was the source of the current token system and
-  apparently had a fuller dashboard mock than what `app/page.tsx` renders
-  today (currently just 4 stat tiles + one table). I tried pulling that
-  project via the DesignSync tool and got a 404 — not accessible from this
-  session/login. **Blocked on the user re-sharing access (or providing
-  screenshots/the file)** before this can be implemented faithfully; "make it
-  nicer" isn't specific enough to build against. Note:
-  `components/ui/bar-chart.tsx` and `column-chart.tsx` exist but aren't used
-  on the dashboard today — likely a sign the original mock had charts there
-  that never got wired up.
+- [x] **Dashboard redesign.** The original Claude Design project
+  (`2c0ced40-c7a3-454a-8606-231613c330dd`, `LightPSA.dc.html`) is confirmed
+  gone — `DesignSync.list_projects` no longer returns it and `get_project`
+  against that id 404s directly, and the user confirmed they don't have a
+  local copy either. Rebuilt `app/page.tsx` from scratch (no reference to
+  recreate against, by the user's choice) rather than leaving it at 4 stat
+  tiles + one table: added a 5th stat tile (**Unassigned** open tickets,
+  amber-accented when > 0 — the previously-missing at-a-glance triage
+  signal), a "Ticket volume — last 4 weeks" `ColumnChart` (same
+  created-vs-resolved bucketing as Reports' 8-week version, but shorter —
+  meant as a pulse check, not a duplicate of Reports' historical view), an
+  "Open tickets by priority" `Bar` breakdown (finally wires up
+  `components/ui/bar-chart.tsx`/`column-chart.tsx`, previously unused outside
+  Reports), an "Upcoming visits" list (next 5 `ScheduledVisit` rows, a widget
+  that didn't exist anywhere before), and a "Recently updated tickets" table
+  (last 6 open tickets by `updatedAt`, for fast triage of what changed). Kept
+  the existing "Open tickets by board" table as-is. `tsc --noEmit` and
+  `npm run build` both clean — confirmed the route's First Load JS is
+  unchanged (213 B / 106 kB) despite the added charts, since everything stays
+  a Server Component (no new client-side state introduced). **Not verified:**
+  no browser available — layout/spacing of the new grid and chart rendering
+  haven't been visually confirmed.
 
 - [x] **Hover-preview on ticket list rows.** Added to
   `app/tickets/tickets-table.tsx` (where row markup actually lives post the
@@ -229,19 +240,27 @@ next most likely).
   verified:** no browser available to confirm the pause-on-focus behavior
   actually works across the comment/time-log/expense forms in practice.
 
-- [ ] **Permission-group RBAC system.** The biggest item on this list besides
-  enterprise mode below. Today `role` is a fixed 3-value enum
-  (ADMIN/MANAGER/TECHNICIAN) checked via `requireRole(...)` sprinkled across
-  nearly every page and server action (`lib/rbac.ts`). "Groups with specific
-  permissions, managed at admin level" implies a new `PermissionGroup` model
-  with granular flags (e.g. `canManageBilling`, `canManageUsers`,
-  `canViewReports`, ...), a `User`↔`Group` many-to-many join, and touching
-  every existing `requireRole` call site to also check group permissions.
-  Recommend this stays **additive** to the existing role enum (groups grant
-  extra permissions on top of role, rather than replacing the whole system in
-  one flag-day rewrite), and recommend a **dedicated planning session** when
-  ready to start — the exact permission catalog needs its own scoping pass,
-  too large to spec correctly as one backlog bullet.
+- [x] **Permission-group RBAC system.** Built additive-only, per the user's
+  explicit choice when asked (a group can only grant a capability on top of a
+  role, never restrict ADMIN/MANAGER below what they already have). New
+  `Permission` enum (11 values, one per real admin gate), `PermissionGroup` +
+  `UserPermissionGroup` models (hand-written migration, same pattern as prior
+  ones this session), `lib/rbac.ts`'s `requirePermission()`, and permissions
+  threaded through the session/JWT and refetched on every request (not just
+  at login). Admin UI at `/admin/permission-groups` (ADMIN-only) plus group
+  assignment on the user edit page. Every other `requireRole(ADMIN, MANAGER)`
+  / `requireRole(ADMIN)` call site across the app (~50, ~28 files) converted
+  to the additive check, and nav/the `/admin` hub made permission-aware so a
+  grant is actually reachable. See `plan.md`'s "Permission-group RBAC system"
+  entry for the full file list, the exact permission catalog, and — the part
+  worth reading before trusting this — a real privilege-escalation hole
+  (`MANAGE_USERS` could mint/edit a full ADMIN account) that an advisor
+  review caught before this was called done, and how it was closed. `tsc
+  --noEmit` and `npm run build` both clean; group creation/assignment/
+  permission-resolution/cascade-delete verified directly against the dev DB.
+  **Not verified:** no browser available — the actual authorization decision
+  (a permissioned technician reaching what they should, blocked from what
+  they shouldn't) needs a real login to confirm, not just code review.
 
 ## MSP → single enterprise mode (needs its own implementation pass)
 

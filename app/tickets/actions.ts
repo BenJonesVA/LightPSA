@@ -8,9 +8,9 @@ import type { TicketPriority, TicketStatus, WorkType, ExpenseType } from "@prism
 import { runAutomationRules, isPriorityEscalation } from "@/lib/automation";
 import { triggerCsatSurvey } from "@/lib/csat";
 import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
-import { sanitizeRichText } from "@/lib/sanitize-html";
+import type { FormActionState } from "@/components/ui/action-form";
 
-export async function createTicket(formData: FormData) {
+export async function createTicket(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
   await requireStaff();
 
   const title = String(formData.get("title") ?? "").trim();
@@ -22,13 +22,13 @@ export async function createTicket(formData: FormData) {
   const expensesEnabled = formData.get("expensesEnabled") === "on";
 
   if (!title || !boardId || !clientId) {
-    throw new Error("Title, board, and client are required.");
+    return { error: "Title, board, and client are required." };
   }
 
   const ticket = await prisma.ticket.create({
     data: {
       title,
-      description: sanitizeRichText(description),
+      description,
       boardId,
       clientId,
       priority,
@@ -282,13 +282,13 @@ export async function toggleExpensesEnabled(ticketId: number, formData: FormData
   revalidatePath(`/tickets/${ticketId}`);
 }
 
-export async function uploadAttachment(ticketId: number, formData: FormData) {
+export async function uploadAttachment(ticketId: number, formData: FormData): Promise<FormActionState> {
   const user = await requireStaff();
 
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return;
+  if (!(file instanceof File) || file.size === 0) return null;
   if (file.size > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`File exceeds the ${MAX_ATTACHMENT_MB}MB limit.`);
+    return { error: `File exceeds the ${MAX_ATTACHMENT_MB}MB limit.` };
   }
 
   const isInternal = formData.get("isInternal") === "on";
@@ -307,6 +307,7 @@ export async function uploadAttachment(ticketId: number, formData: FormData) {
   await saveAttachmentFile(attachment.id, Buffer.from(await file.arrayBuffer()));
 
   revalidatePath(`/tickets/${ticketId}`);
+  return null;
 }
 
 export async function linkAsset(ticketId: number, formData: FormData) {

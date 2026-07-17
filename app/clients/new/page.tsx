@@ -1,13 +1,14 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { createClient } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export default async function NewClientPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
 
   const labels = await getOrgLabels();
 
@@ -21,7 +22,7 @@ export default async function NewClientPage() {
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New {labels.client.toLowerCase()}</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createClient} className="space-y-4">
+        <ActionForm action={createClient} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Name</label>
             <input
@@ -60,7 +61,7 @@ export default async function NewClientPage() {
           <Button type="submit" variant="primary">
             Create {labels.client.toLowerCase()}
           </Button>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
-import { deleteUser, updateUser } from "../actions";
+import { requirePermission } from "@/lib/rbac";
+import { deleteUser, updateUser, setUserPermissionGroups } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { DeleteButton } from "@/components/ui/delete-button";
 
 const ROLE_OPTIONS = [UserRole.ADMIN, UserRole.MANAGER, UserRole.TECHNICIAN] as const;
@@ -14,18 +15,28 @@ export default async function UserDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(UserRole.ADMIN);
+  const viewer = await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
+  // Group *assignment* stays ADMIN-only regardless of a granted MANAGE_USERS
+  // permission (setUserPermissionGroups enforces this too) — otherwise a
+  // permissioned non-admin could hand themselves or anyone else more access
+  // than an ADMIN chose to grant.
+  const viewerIsAdmin = viewer.role === UserRole.ADMIN;
 
   const { id } = await params;
 
-  const user = await prisma.user.findUnique({ where: { id } });
+  const [user, allGroups] = await Promise.all([
+    prisma.user.findUnique({ where: { id }, include: { permissionGroups: { select: { groupId: true } } } }),
+    viewerIsAdmin ? prisma.permissionGroup.findMany({ orderBy: { name: "asc" } }) : Promise.resolve([]),
+  ]);
 
   if (!user) {
     notFound();
   }
 
+  const memberGroupIds = new Set(user.permissionGroups.map((m) => m.groupId));
   const updateUserForId = updateUser.bind(null, user.id);
   const deleteUserForId = deleteUser.bind(null, user.id);
+  const setGroupsForUser = setUserPermissionGroups.bind(null, user.id);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -33,7 +44,7 @@ export default async function UserDetailPage({
       <p className="mt-[3px] text-[13.5px] text-fg-muted">{user.email}</p>
 
       <Card className="mt-6 p-6">
-        <form action={updateUserForId} className="space-y-4">
+        <ActionForm action={updateUserForId} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Email</label>
             <p className="mt-1 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-fg-muted">
@@ -107,8 +118,47 @@ export default async function UserDetailPage({
               Save changes
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
+
+      {viewerIsAdmin && (
+        <Card className="mt-6">
+          <CardHeader>
+            <h2 className="text-[13.5px] font-semibold text-fg">Permission groups</h2>
+          </CardHeader>
+          {allGroups.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-fg-muted">
+              No permission groups exist yet. Create one on the{" "}
+              <a href="/admin/permission-groups" className="text-accent hover:underline">
+                Permission Groups
+              </a>{" "}
+              page.
+            </p>
+          ) : (
+            <ActionForm action={setGroupsForUser} className="flex flex-col gap-3 p-5">
+              <div className="flex flex-col gap-2">
+                {allGroups.map((group) => (
+                  <label key={group.id} className="flex items-center gap-2.5 text-sm text-fg-muted">
+                    <input
+                      type="checkbox"
+                      name="groupIds"
+                      value={group.id}
+                      defaultChecked={memberGroupIds.has(group.id)}
+                      className="rounded border-border-strong accent-accent"
+                    />
+                    {group.name}
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" variant="primary" size="sm">
+                  Save groups
+                </Button>
+              </div>
+            </ActionForm>
+          )}
+        </Card>
+      )}
 
       <div className="mt-6 flex justify-end">
         <DeleteButton action={deleteUserForId} label="Delete user" />

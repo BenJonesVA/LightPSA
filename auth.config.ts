@@ -13,6 +13,7 @@ export default {
         token.actorType = user.actorType;
         token.role = user.role;
         token.clientId = user.clientId;
+        token.permissions = user.permissions;
       }
       return token;
     },
@@ -21,6 +22,7 @@ export default {
       session.user.actorType = token.actorType;
       session.user.role = token.role;
       session.user.clientId = token.clientId;
+      session.user.permissions = token.permissions;
       return session;
     },
   },

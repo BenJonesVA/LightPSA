@@ -4,12 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import type { FormActionState } from "@/components/ui/action-form";
 
 // Open to any staff role — dispatch/scheduling is a day-to-day coordination
 // task, not an admin concern, same reasoning as Tickets/KB being open to
 // all staff rather than gated like Boards/Clients creation.
 
-export async function createVisit(formData: FormData) {
+export async function createVisit(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
   await requireStaff();
 
   const ticketId = Number(formData.get("ticketId"));
@@ -19,13 +20,13 @@ export async function createVisit(formData: FormData) {
   const location = String(formData.get("location") ?? "").trim() || null;
 
   if (!Number.isInteger(ticketId) || !technicianId || !startTimeRaw || !endTimeRaw) {
-    throw new Error("Ticket, technician, start time, and end time are required.");
+    return { error: "Ticket, technician, start time, and end time are required." };
   }
 
   const startTime = new Date(startTimeRaw);
   const endTime = new Date(endTimeRaw);
   if (!(endTime > startTime)) {
-    throw new Error("End time must be after start time.");
+    return { error: "End time must be after start time." };
   }
 
   await prisma.scheduledVisit.create({

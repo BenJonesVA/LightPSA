@@ -2,6 +2,7 @@ import { requireClientSession } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createPortalTicket } from "../../actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 export default async function NewPortalTicketPage() {
   await requireClientSession();
@@ -11,7 +12,7 @@ export default async function NewPortalTicketPage() {
       <h1 className="text-[26px] font-bold tracking-tight text-fg">New Ticket</h1>
 
       <Card className="rounded-2xl p-6">
-        <form action={createPortalTicket} className="flex flex-col gap-5">
+        <ActionForm action={createPortalTicket} className="flex flex-col gap-5">
           <div>
             <label className="block text-[14px] font-medium text-fg-muted">Title</label>
             <input
@@ -48,7 +49,7 @@ export default async function NewPortalTicketPage() {
           <Button type="submit" variant="primary" className="w-full justify-center px-6 py-3 text-[15px]">
             Submit Ticket
           </Button>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

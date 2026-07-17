@@ -1,9 +1,10 @@
 "use server";
 
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
+import type { FormActionState } from "@/components/ui/action-form";
 
 function readFields(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
@@ -11,28 +12,33 @@ function readFields(formData: FormData) {
   const boardId = String(formData.get("boardId") ?? "").trim() || null;
 
   if (!title || !body) {
-    throw new Error("Title and body are required");
+    return { error: "Title and body are required" } as const;
   }
 
-  return { title, body, boardId };
+  return { title, body, boardId } as const;
 }
 
-export async function createCannedResponse(formData: FormData) {
-  const user = await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createCannedResponse(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  const user = await requirePermission(Permission.MANAGE_CANNED_RESPONSES, UserRole.ADMIN, UserRole.MANAGER);
 
-  const { title, body, boardId } = readFields(formData);
+  const fields = readFields(formData);
+  if ("error" in fields) return { error: fields.error };
+  const { title, body, boardId } = fields;
 
   await prisma.cannedResponse.create({
     data: { title, body, boardId, createdById: user.id },
   });
 
   revalidatePath("/admin/canned-responses");
+  return null;
 }
 
-export async function updateCannedResponse(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function updateCannedResponse(id: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CANNED_RESPONSES, UserRole.ADMIN, UserRole.MANAGER);
 
-  const { title, body, boardId } = readFields(formData);
+  const fields = readFields(formData);
+  if ("error" in fields) return { error: fields.error };
+  const { title, body, boardId } = fields;
 
   await prisma.cannedResponse.update({
     where: { id },
@@ -40,10 +46,11 @@ export async function updateCannedResponse(id: string, formData: FormData) {
   });
 
   revalidatePath("/admin/canned-responses");
+  return null;
 }
 
 export async function deleteCannedResponse(id: string) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CANNED_RESPONSES, UserRole.ADMIN, UserRole.MANAGER);
 
   await prisma.cannedResponse.delete({ where: { id } });
 

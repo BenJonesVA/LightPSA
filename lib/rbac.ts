@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import type { UserRole } from "@prisma/client";
+import type { Permission, UserRole } from "@prisma/client";
 import { auth } from "@/auth";
 
 // Server-only authorization helpers. Middleware only does a coarse
@@ -20,6 +20,19 @@ export async function requireRole(...roles: UserRole[]) {
     redirect("/unauthorized");
   }
   return user;
+}
+
+// Additive permission check: passes if the user's role is one of `roles`
+// (identical to requireRole — this never restricts ADMIN/MANAGER below what
+// they already have), OR the user holds `permission` via a PermissionGroup.
+// Use this instead of requireRole wherever a permission group should be able
+// to grant the capability to a role that wouldn't otherwise have it (e.g.
+// letting a TECHNICIAN manage boards without promoting them to MANAGER).
+export async function requirePermission(permission: Permission, ...roles: UserRole[]) {
+  const user = await requireStaff();
+  if (user.role && roles.includes(user.role)) return user;
+  if (user.permissions?.includes(permission)) return user;
+  redirect("/unauthorized");
 }
 
 export async function requireClientSession() {

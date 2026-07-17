@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { createVisit } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -34,7 +35,7 @@ export default async function NewScheduledVisitPage({
       <h1 className="text-[24px] font-bold tracking-tight text-fg">Schedule a visit</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createVisit} className="space-y-4">
+        <ActionForm action={createVisit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Ticket</label>
             <select
@@ -109,7 +110,7 @@ export default async function NewScheduledVisitPage({
               Schedule visit
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

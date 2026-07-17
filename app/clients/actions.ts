@@ -1,16 +1,17 @@
 "use server";
 
-import { Prisma, UserRole } from "@prisma/client";
+import { Permission, Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { parseFieldSchema, extractCustomFieldsFromFormData, validateCustomFieldValues } from "@/lib/asset-fields";
 import type { DeleteActionState } from "@/components/ui/delete-button";
+import type { FormActionState } from "@/components/ui/action-form";
 
-export async function createClient(formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createClient(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const billingAddress = String(formData.get("billingAddress") ?? "").trim() || null;
@@ -19,7 +20,7 @@ export async function createClient(formData: FormData) {
 
   if (!name) {
     const labels = await getOrgLabels();
-    throw new Error(`${labels.client} name is required`);
+    return { error: `${labels.client} name is required` };
   }
 
   const client = await prisma.client.create({
@@ -29,8 +30,8 @@ export async function createClient(formData: FormData) {
   redirect(`/clients/${client.id}`);
 }
 
-export async function updateClient(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function updateClient(id: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const billingAddress = String(formData.get("billingAddress") ?? "").trim() || null;
@@ -38,7 +39,7 @@ export async function updateClient(id: string, formData: FormData) {
 
   if (!name) {
     const labels = await getOrgLabels();
-    throw new Error(`${labels.client} name is required`);
+    return { error: `${labels.client} name is required` };
   }
 
   await prisma.client.update({
@@ -48,6 +49,7 @@ export async function updateClient(id: string, formData: FormData) {
 
   revalidatePath("/clients");
   revalidatePath(`/clients/${id}`);
+  return null;
 }
 
 // Returns { error } instead of throwing for the expected/guarded failure —
@@ -55,7 +57,7 @@ export async function updateClient(id: string, formData: FormData) {
 // (components/ui/delete-button.tsx explains why), which would otherwise turn
 // this into a blank crash screen instead of the message below.
 export async function deleteClient(id: string, _prevState: DeleteActionState, _formData: FormData): Promise<DeleteActionState> {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
 
   try {
     await prisma.client.delete({ where: { id } });
@@ -75,8 +77,8 @@ export async function deleteClient(id: string, _prevState: DeleteActionState, _f
   redirect("/clients");
 }
 
-export async function createContact(clientId: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createContact(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
 
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
@@ -88,7 +90,7 @@ export async function createContact(clientId: string, formData: FormData) {
   const portalAccess = formData.get("portalAccess") === "on";
 
   if (!firstName || !lastName || !email) {
-    throw new Error("First name, last name, and email are required");
+    return { error: "First name, last name, and email are required" };
   }
 
   await prisma.contact.create({
@@ -106,10 +108,11 @@ export async function createContact(clientId: string, formData: FormData) {
   });
 
   revalidatePath(`/clients/${clientId}`);
+  return null;
 }
 
-export async function createAsset(clientId: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function createAsset(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_ASSETS, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
@@ -117,7 +120,7 @@ export async function createAsset(clientId: string, formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   if (!name || !categoryId) {
-    throw new Error("Asset name and category are required");
+    return { error: "Asset name and category are required" };
   }
 
   const category = await prisma.assetCategory.findUnique({ where: { id: categoryId } });
@@ -128,7 +131,7 @@ export async function createAsset(clientId: string, formData: FormData) {
   const customFields = extractCustomFieldsFromFormData(formData, fieldSchema);
   const fieldError = validateCustomFieldValues(fieldSchema, customFields);
   if (fieldError) {
-    throw new Error(fieldError);
+    return { error: fieldError };
   }
 
   await prisma.asset.create({
@@ -136,4 +139,5 @@ export async function createAsset(clientId: string, formData: FormData) {
   });
 
   revalidatePath(`/clients/${clientId}`);
+  return null;
 }

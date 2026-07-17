@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { deleteBoard, updateBoard } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DeleteButton } from "@/components/ui/delete-button";
@@ -12,7 +13,7 @@ export default async function BoardDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_BOARDS, UserRole.ADMIN, UserRole.MANAGER);
 
   const { id } = await params;
 
@@ -32,7 +33,7 @@ export default async function BoardDetailPage({
       <h1 className="text-[24px] font-bold tracking-tight text-fg">{board.name}</h1>
 
       <Card className="mt-6 p-6">
-        <form action={updateBoardForBoard} className="space-y-4">
+        <ActionForm action={updateBoardForBoard} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-fg-muted">
               Name
@@ -81,7 +82,7 @@ export default async function BoardDetailPage({
               Save
             </Button>
           </div>
-        </form>
+        </ActionForm>
 
         <div className="mt-6 flex justify-end border-t border-border pt-6">
           <DeleteButton action={deleteBoardForBoard} label="Delete board" />

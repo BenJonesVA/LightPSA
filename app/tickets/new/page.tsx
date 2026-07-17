@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { createTicket } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 export default async function NewTicketPage() {
   await requireStaff();
@@ -22,7 +23,7 @@ export default async function NewTicketPage() {
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New ticket</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createTicket} className="space-y-4">
+        <ActionForm action={createTicket} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-fg-muted">Title</label>
             <input
@@ -35,7 +36,7 @@ export default async function NewTicketPage() {
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Description</label>
-            <RichTextEditor name="description" defaultValue="" />
+            <MarkdownEditor name="description" defaultValue="" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -109,7 +110,7 @@ export default async function NewTicketPage() {
           <Button type="submit" variant="primary">
             Create ticket
           </Button>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

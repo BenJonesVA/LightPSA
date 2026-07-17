@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export default async function UsersAdminPage() {
-  await requireRole(UserRole.ADMIN);
+  await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
 
   const users = await prisma.user.findMany({
     orderBy: { name: "asc" },

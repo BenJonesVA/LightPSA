@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireClientSession } from "@/lib/rbac";
 import { Card } from "@/components/ui/card";
-import { RichText } from "@/components/ui/rich-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 export default async function PortalKbArticleDetailPage({
   params,
@@ -34,7 +34,7 @@ export default async function PortalKbArticleDetailPage({
       </div>
 
       <Card className="rounded-2xl p-6">
-        <RichText html={article.body} className="text-[15px] text-fg" />
+        <MarkdownContent markdown={article.body} className="text-[15px] text-fg" />
       </Card>
     </div>
   );

@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { createAssetCategory, renameAssetCategory, deleteAssetCategory } from "./actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 type AssetCategoryRow = { id: string; name: string; parentId: string | null };
 
@@ -61,7 +62,7 @@ function AssetCategoryNode({
     <div className="flex flex-col gap-2">
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <form
+          <ActionForm
             action={renameAssetCategory.bind(null, category.id)}
             className="flex flex-1 flex-wrap items-center gap-2"
           >
@@ -80,7 +81,7 @@ function AssetCategoryNode({
             <Button type="submit" variant="primary" size="sm">
               Save
             </Button>
-          </form>
+          </ActionForm>
           <Link href={`/admin/asset-categories/${category.id}/fields`}>
             <Button type="button" variant="secondary" size="sm">
               Fields
@@ -106,7 +107,7 @@ function AssetCategoryNode({
 }
 
 export default async function AssetCategoriesAdminPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   const categories = await prisma.assetCategory.findMany({ orderBy: { name: "asc" } });
   const childrenMap = buildChildrenMap(categories);
@@ -122,7 +123,7 @@ export default async function AssetCategoriesAdminPage() {
       </div>
 
       <Card className="p-4">
-        <form action={createAssetCategory} className="flex flex-wrap items-end gap-2">
+        <ActionForm action={createAssetCategory} className="flex flex-wrap items-end gap-2">
           <label className="block flex-1">
             <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">
               Category name
@@ -141,7 +142,7 @@ export default async function AssetCategoriesAdminPage() {
           <Button type="submit" variant="primary" size="sm">
             Add category
           </Button>
-        </form>
+        </ActionForm>
       </Card>
 
       <div className="flex flex-col gap-2">

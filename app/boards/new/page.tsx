@@ -1,18 +1,19 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { createBoard } from "@/app/boards/actions";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
+import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export default async function NewBoardPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_BOARDS, UserRole.ADMIN, UserRole.MANAGER);
 
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="text-[24px] font-bold tracking-tight text-fg">New board</h1>
 
       <Card className="mt-6 p-6">
-        <form action={createBoard} className="space-y-4">
+        <ActionForm action={createBoard} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-fg-muted">
               Name
@@ -50,7 +51,7 @@ export default async function NewBoardPage() {
               Create board
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </div>
   );

@@ -86,6 +86,49 @@ enum AutomationAction {
   CHANGE_PRIORITY
 }
 
+// One entry per real admin-only/manager-only gate in the app (lib/rbac.ts's
+// requireRole call sites) — additive on top of the role enum, never a
+// replacement: a permission grants a capability a user's role wouldn't
+// otherwise have (e.g. letting a TECHNICIAN manage boards), it never takes
+// one away from ADMIN/MANAGER. See lib/permissions.ts for the catalog with
+// human labels, and lib/rbac.ts's requirePermission() for the check itself.
+enum Permission {
+  MANAGE_BOARDS
+  MANAGE_CLIENTS
+  MANAGE_ASSETS
+  MANAGE_CATEGORIES
+  MANAGE_AUTOMATION
+  MANAGE_SLA
+  MANAGE_CANNED_RESPONSES
+  MANAGE_BRANDING
+  MANAGE_USERS
+  MANAGE_BILLING
+  VIEW_REPORTS
+}
+
+// Admin-managed, named bundles of Permission grants. A user in zero groups
+// behaves exactly as before this feature existed — this is purely additive.
+model PermissionGroup {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  permissions Permission[] @default([])
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  members UserPermissionGroup[]
+}
+
+model UserPermissionGroup {
+  id      String @id @default(cuid())
+  userId  String
+  groupId String
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   PermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+}
+
 // ── Internal Users (Technicians / Admins) ─────────────────
 
 model User {
@@ -109,6 +152,7 @@ model User {
   scheduledVisits  ScheduledVisit[] @relation("ScheduledVisitTechnician")
   automationAssignments AutomationRule[] @relation("AutomationActionAssignee")
   uploadedAttachments   Attachment[]    @relation("AttachmentUploaderUser")
+  permissionGroups      UserPermissionGroup[]
 
   @@index([role])
 }

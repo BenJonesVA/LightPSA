@@ -1,9 +1,10 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createCategory, renameCategory, deleteCategory } from "./actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 type CategoryRow = { id: string; name: string; parentId: string | null };
 
@@ -58,7 +59,7 @@ function CategoryNode({
     <div className="flex flex-col gap-2">
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <form
+          <ActionForm
             action={renameCategory.bind(null, category.id)}
             className="flex flex-1 flex-wrap items-center gap-2"
           >
@@ -77,7 +78,7 @@ function CategoryNode({
             <Button type="submit" variant="primary" size="sm">
               Save
             </Button>
-          </form>
+          </ActionForm>
           <form action={deleteCategory.bind(null, category.id)}>
             <Button type="submit" variant="danger" size="sm">
               Delete
@@ -102,7 +103,7 @@ function CategoryNode({
 }
 
 export default async function CategoriesAdminPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CATEGORIES, UserRole.ADMIN, UserRole.MANAGER);
 
   const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
   const childrenMap = buildChildrenMap(categories);
@@ -118,7 +119,7 @@ export default async function CategoriesAdminPage() {
       </div>
 
       <Card className="p-4">
-        <form action={createCategory} className="flex flex-wrap items-end gap-2">
+        <ActionForm action={createCategory} className="flex flex-wrap items-end gap-2">
           <label className="block flex-1">
             <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">
               Category name
@@ -137,7 +138,7 @@ export default async function CategoriesAdminPage() {
           <Button type="submit" variant="primary" size="sm">
             Add category
           </Button>
-        </form>
+        </ActionForm>
       </Card>
 
       <div className="flex flex-col gap-2">

@@ -5,8 +5,9 @@ import { requireClientSession } from "@/lib/rbac";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { RichText } from "@/components/ui/rich-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import { addPortalComment, uploadPortalAttachment } from "../../actions";
+import { ActionForm, type FormActionState } from "@/components/ui/action-form";
 import { formatBytes } from "@/lib/format";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 
@@ -47,9 +48,9 @@ export default async function PortalTicketDetailPage({
     await addPortalComment(ticketId, formData);
   }
 
-  async function submitUploadAttachment(formData: FormData) {
+  async function submitUploadAttachment(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
     "use server";
-    await uploadPortalAttachment(ticketId, formData);
+    return uploadPortalAttachment(ticketId, formData);
   }
 
   return (
@@ -71,7 +72,7 @@ export default async function PortalTicketDetailPage({
 
       <Card className="rounded-2xl p-6">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-fg-subtle">Description</h2>
-        <RichText html={ticket.description} className="mt-3 text-[15px] leading-relaxed text-fg" />
+        <MarkdownContent markdown={ticket.description} className="mt-3 text-[15px] leading-relaxed text-fg" />
       </Card>
 
       <Card className="rounded-2xl">
@@ -96,7 +97,7 @@ export default async function PortalTicketDetailPage({
           ) : null}
         </ul>
 
-        <form
+        <ActionForm
           action={submitUploadAttachment}
           encType="multipart/form-data"
           className="flex flex-col gap-3 border-t border-border px-6 py-5"
@@ -108,7 +109,7 @@ export default async function PortalTicketDetailPage({
               Upload
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
 
       <Card className="rounded-2xl">

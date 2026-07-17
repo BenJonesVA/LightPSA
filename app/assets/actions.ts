@@ -1,15 +1,16 @@
 "use server";
 
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { DeleteActionState } from "@/components/ui/delete-button";
+import type { FormActionState } from "@/components/ui/action-form";
 import { parseFieldSchema, extractCustomFieldsFromFormData, validateCustomFieldValues } from "@/lib/asset-fields";
 
-export async function updateAsset(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+export async function updateAsset(id: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_ASSETS, UserRole.ADMIN, UserRole.MANAGER);
 
   const name = String(formData.get("name") ?? "").trim();
   const clientId = String(formData.get("clientId") ?? "").trim();
@@ -19,7 +20,7 @@ export async function updateAsset(id: string, formData: FormData) {
   const isActive = formData.get("isActive") === "on";
 
   if (!name || !clientId || !categoryId) {
-    throw new Error("Asset name, client, and category are required");
+    return { error: "Asset name, client, and category are required" };
   }
 
   const existing = await prisma.asset.findUnique({ where: { id }, select: { clientId: true } });
@@ -35,7 +36,7 @@ export async function updateAsset(id: string, formData: FormData) {
   const customFields = extractCustomFieldsFromFormData(formData, fieldSchema);
   const fieldError = validateCustomFieldValues(fieldSchema, customFields);
   if (fieldError) {
-    throw new Error(fieldError);
+    return { error: fieldError };
   }
 
   const asset = await prisma.asset.update({
@@ -49,6 +50,7 @@ export async function updateAsset(id: string, formData: FormData) {
   if (asset.clientId !== existing.clientId) {
     revalidatePath(`/clients/${asset.clientId}`);
   }
+  return null;
 }
 
 // TicketAsset.assetId cascades on delete (unlike Board/User/Client, which
@@ -58,7 +60,7 @@ export async function updateAsset(id: string, formData: FormData) {
 // delete actions (see components/ui/delete-button.tsx): a thrown Error's
 // message gets redacted by Next.js in production builds.
 export async function deleteAsset(id: string, _prevState: DeleteActionState, _formData: FormData): Promise<DeleteActionState> {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_ASSETS, UserRole.ADMIN, UserRole.MANAGER);
 
   const asset = await prisma.asset.findUnique({ where: { id }, select: { clientId: true } });
   if (!asset) {

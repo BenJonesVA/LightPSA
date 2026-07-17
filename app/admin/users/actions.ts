@@ -1,17 +1,23 @@
 "use server";
 
-import { Prisma, UserRole } from "@prisma/client";
+import { Permission, Prisma, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission, requireRole } from "@/lib/rbac";
 import type { DeleteActionState } from "@/components/ui/delete-button";
+import type { FormActionState } from "@/components/ui/action-form";
 
 const VALID_ROLES = Object.values(UserRole);
 
-export async function createUser(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+// Returns { error } instead of throwing for guarded/expected failures — a
+// thrown Error's message gets redacted by Next.js in production builds
+// (components/ui/delete-button.tsx explains why), which would otherwise land
+// the user on the generic app/error.tsx screen instead of an inline message
+// next to their still-filled-in form.
+export async function createUser(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  const actingUser = await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
@@ -20,13 +26,20 @@ export async function createUser(formData: FormData) {
   const password = String(formData.get("password") ?? "");
 
   if (!name || !email || !password) {
-    throw new Error("Name, email, and password are required");
+    return { error: "Name, email, and password are required" };
   }
   if (password.length < 8) {
-    throw new Error("Password must be at least 8 characters");
+    return { error: "Password must be at least 8 characters" };
   }
   if (!VALID_ROLES.includes(role as UserRole)) {
     throw new Error("Invalid role");
+  }
+  // MANAGE_USERS is additive on top of a role, not admin-equivalent — a
+  // TECHNICIAN/MANAGER granted it can manage non-admin staff, but minting a
+  // brand-new ADMIN account (and logging in as it) is a real ADMIN's call
+  // alone, same reasoning as the last-active-admin guard below.
+  if (role === UserRole.ADMIN && actingUser.role !== UserRole.ADMIN) {
+    return { error: "Only an admin can create another admin." };
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -38,7 +51,7 @@ export async function createUser(formData: FormData) {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new Error("A user with that email already exists");
+      return { error: "A user with that email already exists" };
     }
     throw error;
   }
@@ -46,8 +59,8 @@ export async function createUser(formData: FormData) {
   redirect(`/admin/users/${user.id}`);
 }
 
-export async function updateUser(id: string, formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+export async function updateUser(id: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  const actingUser = await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
 
   const name = String(formData.get("name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
@@ -56,18 +69,27 @@ export async function updateUser(id: string, formData: FormData) {
   const newPassword = String(formData.get("password") ?? "");
 
   if (!name) {
-    throw new Error("Name is required");
+    return { error: "Name is required" };
   }
   if (!VALID_ROLES.includes(role as UserRole)) {
     throw new Error("Invalid role");
   }
   if (newPassword && newPassword.length < 8) {
-    throw new Error("Password must be at least 8 characters");
+    return { error: "Password must be at least 8 characters" };
   }
 
   const currentUser = await prisma.user.findUnique({ where: { id } });
   if (!currentUser) {
     throw new Error("User not found");
+  }
+
+  // Same reasoning as createUser above: MANAGE_USERS is additive, not
+  // admin-equivalent. Block both directions of escalation — granting the
+  // admin role, and touching an account that already holds it (edits,
+  // deactivation, or a role change away from it) — unless the acting user is
+  // a real ADMIN themselves.
+  if ((role === UserRole.ADMIN || currentUser.role === UserRole.ADMIN) && actingUser.role !== UserRole.ADMIN) {
+    return { error: "Only an admin can grant or modify the admin role." };
   }
 
   // If this edit would take the user out of "active ADMIN" status (role
@@ -81,7 +103,7 @@ export async function updateUser(id: string, formData: FormData) {
       where: { role: UserRole.ADMIN, isActive: true, id: { not: id } },
     });
     if (otherActiveAdmins === 0) {
-      throw new Error("Cannot remove the last active admin");
+      return { error: "Cannot remove the last active admin" };
     }
   }
 
@@ -100,6 +122,7 @@ export async function updateUser(id: string, formData: FormData) {
 
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${id}`);
+  return null;
 }
 
 // Returns { error } instead of throwing for expected/guarded failures — a
@@ -107,11 +130,17 @@ export async function updateUser(id: string, formData: FormData) {
 // (components/ui/delete-button.tsx explains why), which would otherwise turn
 // these into a blank crash screen instead of a useful message.
 export async function deleteUser(id: string, _prevState: DeleteActionState, _formData: FormData): Promise<DeleteActionState> {
-  await requireRole(UserRole.ADMIN);
+  const actingUser = await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
 
   const currentUser = await prisma.user.findUnique({ where: { id } });
   if (!currentUser) {
     return { error: "User not found" };
+  }
+
+  // Same escalation guard as create/update above — a MANAGE_USERS grant
+  // doesn't extend to touching an existing admin's account.
+  if (currentUser.role === UserRole.ADMIN && actingUser.role !== UserRole.ADMIN) {
+    return { error: "Only an admin can delete an admin account." };
   }
 
   if (currentUser.role === UserRole.ADMIN && currentUser.isActive) {
@@ -139,4 +168,27 @@ export async function deleteUser(id: string, _prevState: DeleteActionState, _for
 
   revalidatePath("/admin/users");
   redirect("/admin/users");
+}
+
+// Replaces the user's full group membership set with whatever's checked —
+// simpler and safer than diffing add/remove, and this form always submits
+// the complete set of checkboxes anyway.
+export async function setUserPermissionGroups(userId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requireRole(UserRole.ADMIN);
+
+  const groupIds = formData.getAll("groupIds").map(String);
+
+  await prisma.$transaction([
+    prisma.userPermissionGroup.deleteMany({ where: { userId } }),
+    ...(groupIds.length > 0
+      ? [
+          prisma.userPermissionGroup.createMany({
+            data: groupIds.map((groupId) => ({ userId, groupId })),
+          }),
+        ]
+      : []),
+  ]);
+
+  revalidatePath(`/admin/users/${userId}`);
+  return null;
 }

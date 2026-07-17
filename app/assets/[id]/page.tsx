@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { parseFieldSchema, parseCustomFieldValues } from "@/lib/asset-fields";
 import { updateAsset, deleteAsset } from "../actions";
+import { ActionForm } from "@/components/ui/action-form";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -18,7 +19,10 @@ export default async function AssetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const staff = await requireStaff();
-  const canManage = staff.role === UserRole.ADMIN || staff.role === UserRole.MANAGER;
+  const canManage =
+    staff.role === UserRole.ADMIN ||
+    staff.role === UserRole.MANAGER ||
+    (staff.permissions?.includes(Permission.MANAGE_ASSETS) ?? false);
   const labels = await getOrgLabels();
 
   const { id } = await params;
@@ -80,7 +84,7 @@ export default async function AssetDetailPage({
         </CardHeader>
         {canManage ? (
           <>
-            <form action={updateAssetForAsset} className="grid grid-cols-2 gap-3 p-4">
+            <ActionForm action={updateAssetForAsset} className="grid grid-cols-2 gap-3 p-4">
               <input
                 name="name"
                 placeholder="Name"
@@ -136,7 +140,7 @@ export default async function AssetDetailPage({
               <Button type="submit" variant="primary" className="col-span-2 sm:col-span-1">
                 Save
               </Button>
-            </form>
+            </ActionForm>
             <div className="flex justify-end border-t border-border p-4">
               <DeleteButton action={deleteAssetForAsset} label="Delete asset" />
             </div>

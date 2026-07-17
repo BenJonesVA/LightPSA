@@ -1,7 +1,7 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { toggleAutomationRule } from "@/app/automation/actions";
 import { Card } from "@/components/ui/card";
@@ -48,7 +48,7 @@ function RuleToggle({ isActive }: { isActive: boolean }) {
 }
 
 export default async function AutomationRulesPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_AUTOMATION, UserRole.ADMIN, UserRole.MANAGER);
 
   const labels = await getOrgLabels();
 

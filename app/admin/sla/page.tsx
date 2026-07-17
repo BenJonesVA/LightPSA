@@ -1,10 +1,11 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { PriorityBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { updateSlaPolicy } from "./actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "EMERGENCY"] as const;
 
@@ -16,7 +17,7 @@ function formatMinutes(minutes: number): string {
 }
 
 export default async function SlaAdminPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_SLA, UserRole.ADMIN, UserRole.MANAGER);
 
   const policies = await prisma.slaPolicy.findMany();
   const sorted = [...policies].sort(
@@ -36,7 +37,7 @@ export default async function SlaAdminPage() {
       <div className="flex flex-col gap-3">
         {sorted.map((policy) => (
           <Card key={policy.id} className="p-4">
-            <form action={updateSlaPolicy.bind(null, policy.id)} className="flex flex-col gap-3">
+            <ActionForm action={updateSlaPolicy.bind(null, policy.id)} className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <PriorityBadge priority={policy.priority} />
                 <span className="text-xs text-fg-subtle">
@@ -88,7 +89,7 @@ export default async function SlaAdminPage() {
                   Save
                 </Button>
               </div>
-            </form>
+            </ActionForm>
           </Card>
         ))}
       </div>

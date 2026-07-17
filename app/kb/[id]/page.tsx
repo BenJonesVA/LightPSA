@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RichText } from "@/components/ui/rich-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 export default async function KbArticleDetailPage({
   params,
@@ -48,7 +48,7 @@ export default async function KbArticleDetailPage({
       </div>
 
       <Card className="p-5">
-        <RichText html={article.body} className="text-[13.5px] text-fg" />
+        <MarkdownContent markdown={article.body} className="text-[13.5px] text-fg" />
       </Card>
     </div>
   );

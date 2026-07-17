@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Permission, UserRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { getSettings } from "@/lib/settings";
 import { LogoutButton } from "@/components/logout-button";
@@ -17,15 +18,42 @@ function workspaceLinks(isEnterprise: boolean) {
   ];
 }
 
-function manageLinks(isEnterprise: boolean) {
-  return [
-    { href: "/admin", label: "Admin" },
-    ...(isEnterprise ? [] : [{ href: "/billing", label: "Billing" }]),
-    { href: "/automation", label: "Automation" },
-    { href: "/admin/sla", label: "SLA Policies" },
-    { href: "/admin/categories", label: "Categories" },
-    { href: "/reports", label: "Reports" },
-  ];
+// Permissions that unlock at least one card on the /admin hub (see that
+// page's SECTIONS) — everything except MANAGE_CLIENTS/MANAGE_ASSETS/
+// VIEW_REPORTS, which are reachable through their own nav links instead and
+// have no hub-only destination. Showing the "Admin" link for those three
+// alone would be a dead end: the hub would filter to zero cards and bounce
+// to /unauthorized.
+const HUB_PERMISSIONS: Permission[] = [
+  Permission.MANAGE_BOARDS,
+  Permission.MANAGE_CATEGORIES,
+  Permission.MANAGE_CANNED_RESPONSES,
+  Permission.MANAGE_BRANDING,
+  Permission.MANAGE_USERS,
+  Permission.MANAGE_SLA,
+  Permission.MANAGE_AUTOMATION,
+  Permission.MANAGE_BILLING,
+];
+
+// Additive: a link shows for ADMIN/MANAGER as before, or for anyone else who
+// holds the specific permission that page is gated by (see lib/rbac.ts's
+// requirePermission and app/admin/page.tsx's SECTIONS for the matching
+// gates) — a granted permission with no way to navigate to it would be a
+// dead end.
+function manageLinks(isEnterprise: boolean, role: UserRole | undefined, permissions: Permission[]) {
+  const isManager = role === UserRole.ADMIN || role === UserRole.MANAGER;
+  const has = (permission: Permission) => isManager || permissions.includes(permission);
+
+  const links = [];
+  if (isManager || HUB_PERMISSIONS.some((p) => permissions.includes(p))) {
+    links.push({ href: "/admin", label: "Admin" });
+  }
+  if (!isEnterprise && has(Permission.MANAGE_BILLING)) links.push({ href: "/billing", label: "Billing" });
+  if (has(Permission.MANAGE_AUTOMATION)) links.push({ href: "/automation", label: "Automation" });
+  if (has(Permission.MANAGE_SLA)) links.push({ href: "/admin/sla", label: "SLA Policies" });
+  if (has(Permission.MANAGE_CATEGORIES)) links.push({ href: "/admin/categories", label: "Categories" });
+  if (has(Permission.VIEW_REPORTS)) links.push({ href: "/reports", label: "Reports" });
+  return links;
 }
 
 const CLIENT_NAV_LINKS = [
@@ -86,7 +114,8 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
   }
 
   const isClient = session.user.actorType === "CLIENT";
-  const canSeeAdmin = session.user.role === "ADMIN" || session.user.role === "MANAGER";
+  const permissions = session.user.permissions ?? [];
+  const canSeeAdmin = session.user.role === "ADMIN" || session.user.role === "MANAGER" || permissions.length > 0;
   const settings = await getSettings();
   const logoUrl = settings.logoMimeType ? `/api/branding/logo?v=${settings.updatedAt.getTime()}` : null;
   const isEnterprise = settings.orgMode === "ENTERPRISE";
@@ -131,7 +160,9 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
           <span className="text-[15px] font-bold tracking-tight text-fg">{settings.companyName}</span>
         </div>
         <NavGroup label="Workspace" links={workspaceLinks(isEnterprise)} />
-        {canSeeAdmin && <NavGroup label="Manage" links={manageLinks(isEnterprise)} />}
+        {canSeeAdmin && (
+          <NavGroup label="Manage" links={manageLinks(isEnterprise, session.user.role, permissions)} />
+        )}
         <div className="mt-auto flex items-center gap-[9px] border-t border-border pt-[14px]">
           <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-violet text-[11px] font-semibold text-white">
             {initials(session.user.name ?? "?")}

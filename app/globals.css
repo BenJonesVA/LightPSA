@@ -9,6 +9,7 @@
  * this block can be diffed against a re-export instead of re-derived.
  */
 :root {
+  color-scheme: light;
   --bg: #f5f6f9;
   --surface: #ffffff;
   --surface-2: #f0f2f6;
@@ -44,6 +45,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0c0f16;
   --surface: #141822;
   --surface-2: #1a2030;

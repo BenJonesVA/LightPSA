@@ -4,6 +4,17 @@ import bcrypt from "bcryptjs";
 import authConfig from "./auth.config";
 import { prisma } from "@/lib/prisma";
 
+// Refetched on every request alongside the isActive re-check below, not
+// cached in the token beyond that — an admin revoking a group should take
+// effect on the user's very next page load, not just their next login.
+async function loadPermissions(userId: string) {
+  const memberships = await prisma.userPermissionGroup.findMany({
+    where: { userId },
+    select: { group: { select: { permissions: true } } },
+  });
+  return Array.from(new Set(memberships.flatMap((m) => m.group.permissions)));
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   callbacks: {
@@ -24,6 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.actorType = user.actorType;
         token.role = user.role;
         token.clientId = user.clientId;
+        token.permissions = user.actorType === "STAFF" ? await loadPermissions(user.id!) : [];
         return token;
       }
 
@@ -33,6 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           select: { isActive: true },
         });
         if (!stillValid?.isActive) return null;
+        token.permissions = await loadPermissions(token.sub!);
       } else if (token.actorType === "CLIENT") {
         const stillValid = await prisma.contact.findUnique({
           where: { id: token.sub! },

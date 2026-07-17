@@ -1,9 +1,10 @@
-import { UserRole } from "@prisma/client";
+import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/rbac";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createCannedResponse, deleteCannedResponse, updateCannedResponse } from "./actions";
+import { ActionForm } from "@/components/ui/action-form";
 
 function truncate(text: string, max = 140): string {
   if (text.length <= max) return text;
@@ -37,7 +38,7 @@ function PlaceholderHint() {
 }
 
 export default async function CannedResponsesAdminPage() {
-  await requireRole(UserRole.ADMIN, UserRole.MANAGER);
+  await requirePermission(Permission.MANAGE_CANNED_RESPONSES, UserRole.ADMIN, UserRole.MANAGER);
 
   const [cannedResponses, boards] = await Promise.all([
     prisma.cannedResponse.findMany({ orderBy: { title: "asc" }, include: { board: true } }),
@@ -55,7 +56,7 @@ export default async function CannedResponsesAdminPage() {
 
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold text-fg">New canned response</h2>
-        <form action={createCannedResponse} className="mt-3 flex flex-col gap-3">
+        <ActionForm action={createCannedResponse} className="mt-3 flex flex-col gap-3">
           <label className="block">
             <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">Title</span>
             <input
@@ -87,13 +88,13 @@ export default async function CannedResponsesAdminPage() {
               Create
             </Button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
 
       <div className="flex flex-col gap-3">
         {cannedResponses.map((canned) => (
           <Card key={canned.id} className="p-4">
-            <form
+            <ActionForm
               action={updateCannedResponse.bind(null, canned.id)}
               className="flex flex-col gap-3"
             >
@@ -137,7 +138,7 @@ export default async function CannedResponsesAdminPage() {
                   Save
                 </Button>
               </div>
-            </form>
+            </ActionForm>
             <form action={deleteCannedResponse.bind(null, canned.id)} className="mt-2 flex justify-end">
               <Button type="submit" variant="danger" size="sm">
                 Delete
