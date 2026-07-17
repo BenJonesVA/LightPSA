@@ -319,6 +319,14 @@ model Ticket {
   resolvedAt  DateTime?      @db.Timestamptz(3)
   closedAt    DateTime?      @db.Timestamptz(3)
 
+  // SLA resolution-clock pause tracking: waitingSince is set when the ticket
+  // enters WAITING_ON_CLIENT and cleared when it leaves; totalWaitMinutes
+  // accumulates the elapsed time on each exit. getSlaStatus (lib/sla.ts) adds
+  // both back onto resolutionDueAt so time spent waiting on the client
+  // doesn't count against the MSP's SLA.
+  waitingSince     DateTime? @db.Timestamptz(3)
+  totalWaitMinutes Int       @default(0)
+
   comments        TicketComment[]
   timeLogs        TimeLog[]
   expenses        Expense[]

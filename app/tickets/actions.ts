@@ -69,7 +69,10 @@ export async function updateTicketStatus(ticketId: number, status: string) {
   const user = await requireStaff();
 
   const newStatus = status as TicketStatus;
-  const current = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
+  const current = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { status: true, waitingSince: true, totalWaitMinutes: true },
+  });
   if (!current) return;
 
   // resolvedAt/closedAt are stamped here, not left to whoever reads them —
@@ -84,12 +87,24 @@ export async function updateTicketStatus(ticketId: number, status: string) {
   const isResolvedOrClosed = newStatus === "RESOLVED" || newStatus === "CLOSED";
   const now = new Date();
 
+  // SLA wait-clock: entering WAITING_ON_CLIENT starts the pause, leaving it
+  // (to any other status) banks the elapsed minutes into totalWaitMinutes so
+  // getSlaStatus (lib/sla.ts) can push resolutionDueAt back by that amount.
+  const enteringWait = newStatus === "WAITING_ON_CLIENT" && current.status !== "WAITING_ON_CLIENT";
+  const leavingWait = current.status === "WAITING_ON_CLIENT" && newStatus !== "WAITING_ON_CLIENT";
+  const waitingSince = enteringWait ? now : leavingWait ? null : undefined;
+  const totalWaitMinutes = leavingWait
+    ? current.totalWaitMinutes + Math.floor((now.getTime() - current.waitingSince!.getTime()) / 60_000)
+    : undefined;
+
   const updated = await prisma.ticket.update({
     where: { id: ticketId },
     data: {
       status: newStatus,
       resolvedAt: isResolvedOrClosed ? (wasResolvedOrClosed ? undefined : now) : null,
       closedAt: newStatus === "CLOSED" ? (current.status === "CLOSED" ? undefined : now) : null,
+      waitingSince,
+      totalWaitMinutes,
     },
   });
 
@@ -148,6 +163,35 @@ export async function updateTicketPriority(ticketId: number, formData: FormData)
       },
     });
   }
+
+  revalidatePath(`/tickets/${ticketId}`);
+  revalidatePath("/tickets");
+}
+
+export async function assignTicket(ticketId: number, formData: FormData) {
+  const user = await requireStaff();
+
+  const assigneeIdRaw = String(formData.get("assigneeId") ?? "");
+  const assigneeId = assigneeIdRaw || null;
+
+  const current = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { assigneeId: true } });
+  if (!current) return;
+  if (assigneeId === current.assigneeId) return;
+
+  const assignee = assigneeId
+    ? await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } })
+    : null;
+
+  await prisma.ticket.update({ where: { id: ticketId }, data: { assigneeId } });
+
+  await prisma.ticketComment.create({
+    data: {
+      ticketId,
+      body: assignee ? `Assigned to ${assignee.name} by ${user.name}.` : `Unassigned by ${user.name}.`,
+      isInternal: true,
+      authorUserId: user.id,
+    },
+  });
 
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");

@@ -7,6 +7,7 @@ import {
   addComment,
   updateTicketStatus,
   updateTicketPriority,
+  assignTicket,
   logTime,
   logExpense,
   linkAsset,
@@ -77,7 +78,7 @@ export default async function TicketDetailPage({
 
   if (!ticket) notFound();
 
-  const [slaPolicy, cannedResponses, clientAssets] = await Promise.all([
+  const [slaPolicy, cannedResponses, clientAssets, assignableUsers] = await Promise.all([
     prisma.slaPolicy.findUnique({ where: { priority: ticket.priority } }),
     prisma.cannedResponse.findMany({
       where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
@@ -88,6 +89,7 @@ export default async function TicketDetailPage({
       include: { category: true },
       orderBy: { name: "asc" },
     }),
+    prisma.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
   const linkedAssetIds = new Set(ticket.ticketAssets.map((ta) => ta.assetId));
@@ -109,6 +111,11 @@ export default async function TicketDetailPage({
   async function changePriority(formData: FormData) {
     "use server";
     await updateTicketPriority(ticketId, formData);
+  }
+
+  async function changeAssignee(formData: FormData) {
+    "use server";
+    await assignTicket(ticketId, formData);
   }
 
   async function submitComment(formData: FormData) {
@@ -426,10 +433,6 @@ export default async function TicketDetailPage({
                 <div className="font-medium text-fg">{ticket.board.name}</div>
               </div>
               <div>
-                <div className="mb-1 font-medium text-fg-muted">Assignee</div>
-                <div className="font-medium text-fg">{ticket.assignee?.name ?? "Unassigned"}</div>
-              </div>
-              <div>
                 <div className="mb-1 font-medium text-fg-muted">Category</div>
                 <div className="font-medium text-fg">{ticket.category?.name ?? "—"}</div>
               </div>
@@ -476,6 +479,27 @@ export default async function TicketDetailPage({
                   {PRIORITY_OPTIONS.map((p) => (
                     <option key={p} value={p}>
                       {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" variant="secondary" size="sm">
+                Update
+              </Button>
+            </form>
+
+            <form action={changeAssignee} className="mt-2 flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-fg-muted">Assignee</label>
+                <select
+                  name="assigneeId"
+                  defaultValue={ticket.assigneeId ?? ""}
+                  className="mt-1 w-full rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                >
+                  <option value="">Unassigned</option>
+                  {assignableUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
                     </option>
                   ))}
                 </select>

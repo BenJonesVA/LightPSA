@@ -6,7 +6,7 @@ import { getPermissionCatalog } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ActionForm } from "@/components/ui/action-form";
-import { DeleteButton } from "@/components/ui/delete-button";
+import { PermissionGroupCard } from "@/components/ui/permission-group-card";
 import { createPermissionGroup, updatePermissionGroup, deletePermissionGroup } from "./actions";
 
 const inputClass =
@@ -80,33 +80,13 @@ export default async function PermissionGroupsAdminPage() {
 
       <div className="flex flex-col gap-3">
         {groups.map((group) => (
-          <Card key={group.id} className="p-4">
-            <ActionForm action={updatePermissionGroup.bind(null, group.id)} className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  defaultValue={group.name}
-                  className={`flex-1 ${inputClass}`}
-                />
-                <span className="whitespace-nowrap text-[11.5px] text-fg-subtle">
-                  {group.members.length === 0
-                    ? "No members"
-                    : `${group.members.length} member${group.members.length === 1 ? "" : "s"}`}
-                </span>
-              </div>
-              <PermissionCheckboxes catalog={catalog} checked={new Set(group.permissions)} />
-              <div className="flex justify-end">
-                <Button type="submit" variant="primary" size="sm">
-                  Save
-                </Button>
-              </div>
-            </ActionForm>
-            <div className="mt-3 flex justify-end border-t border-border pt-3">
-              <DeleteButton action={deletePermissionGroup.bind(null, group.id)} label="Delete group" />
-            </div>
-          </Card>
+          <PermissionGroupCard
+            key={group.id}
+            group={group}
+            catalog={catalog}
+            updateAction={updatePermissionGroup.bind(null, group.id)}
+            deleteAction={deletePermissionGroup.bind(null, group.id)}
+          />
         ))}
         {groups.length === 0 && <Card className="p-8 text-center text-fg-subtle">No permission groups yet.</Card>}
       </div>

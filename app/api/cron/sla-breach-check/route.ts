@@ -38,8 +38,11 @@ export async function GET(request: Request) {
       select: {
         id: true,
         title: true,
+        status: true,
         createdAt: true,
         resolvedAt: true,
+        waitingSince: true,
+        totalWaitMinutes: true,
         priority: true,
         comments: { select: { createdAt: true, authorUserId: true, isInternal: true, body: true } },
       },

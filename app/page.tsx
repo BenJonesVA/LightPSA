@@ -62,9 +62,12 @@ export default async function DashboardPage() {
     prisma.ticket.findMany({
       where: { status: { in: [...OPEN_STATUSES] } },
       select: {
+        status: true,
         priority: true,
         createdAt: true,
         resolvedAt: true,
+        waitingSince: true,
+        totalWaitMinutes: true,
         comments: { select: { createdAt: true, authorUserId: true, isInternal: true } },
       },
     }),

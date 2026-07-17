@@ -51,9 +51,12 @@ export default async function ReportsPage() {
     prisma.ticket.findMany({
       where: { createdAt: { gte: periodStart } },
       select: {
+        status: true,
         priority: true,
         createdAt: true,
         resolvedAt: true,
+        waitingSince: true,
+        totalWaitMinutes: true,
         comments: { select: { createdAt: true, authorUserId: true, isInternal: true } },
       },
     }),
