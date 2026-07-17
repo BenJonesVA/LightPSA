@@ -28,6 +28,7 @@ export type TicketRow = {
   priority: TicketPriority;
   assigneeName: string | null;
   createdAt: string;
+  dueAt: string | null;
   sla: { text: string; tone: "red" | "green" | "subtle" };
 };
 
@@ -186,6 +187,7 @@ export function TicketsTable({
             <th className="px-4 py-2.5">Priority</th>
             <th className="px-4 py-2.5">SLA</th>
             <th className="px-4 py-2.5">Assignee</th>
+            <th className="px-4 py-2.5">Due</th>
             <th className="px-4 py-2.5">Created</th>
           </tr>
         </thead>
@@ -232,12 +234,27 @@ export function TicketsTable({
                 </span>
               </td>
               <td className="px-4 py-row-py text-fg-muted">{ticket.assigneeName ?? "Unassigned"}</td>
+              <td className="px-4 py-row-py">
+                {ticket.dueAt ? (
+                  <span
+                    className={
+                      ticket.status !== "RESOLVED" && ticket.status !== "CLOSED" && new Date(ticket.dueAt) < new Date()
+                        ? "font-semibold text-red"
+                        : "text-fg-muted"
+                    }
+                  >
+                    {new Date(ticket.dueAt).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="text-fg-subtle">—</span>
+                )}
+              </td>
               <td className="px-4 py-row-py text-fg-subtle">{new Date(ticket.createdAt).toLocaleString()}</td>
             </tr>
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={10} className="px-4 py-8 text-center text-fg-subtle">
+              <td colSpan={11} className="px-4 py-8 text-center text-fg-subtle">
                 No tickets match the current filters.
               </td>
             </tr>

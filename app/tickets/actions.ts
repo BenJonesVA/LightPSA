@@ -8,6 +8,11 @@ import type { TicketPriority, TicketStatus, WorkType, ExpenseType } from "@prism
 import { runAutomationRules, isPriorityEscalation } from "@/lib/automation";
 import { triggerCsatSurvey } from "@/lib/csat";
 import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
+import {
+  parseFieldSchema,
+  extractCustomFieldsFromFormData,
+  validateCustomFieldValues,
+} from "@/lib/asset-fields";
 import type { FormActionState } from "@/components/ui/action-form";
 
 export async function createTicket(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
@@ -25,6 +30,19 @@ export async function createTicket(_prevState: FormActionState, formData: FormDa
     return { error: "Title, board, and client are required." };
   }
 
+  // Custom fields are only enforced here — the staff-facing create form is
+  // the one path with a category picker. Portal/email/automation-created
+  // tickets have no categoryId at creation time, so they carry none.
+  const category = categoryId
+    ? await prisma.category.findUnique({ where: { id: categoryId }, select: { fieldSchema: true } })
+    : null;
+  const fieldSchema = parseFieldSchema(category?.fieldSchema);
+  const customFields = extractCustomFieldsFromFormData(formData, fieldSchema);
+  const fieldError = validateCustomFieldValues(fieldSchema, customFields);
+  if (fieldError) {
+    return { error: fieldError };
+  }
+
   const ticket = await prisma.ticket.create({
     data: {
       title,
@@ -34,6 +52,7 @@ export async function createTicket(_prevState: FormActionState, formData: FormDa
       priority,
       categoryId,
       expensesEnabled,
+      customFields,
       source: "MANUAL",
     },
   });
@@ -192,6 +211,19 @@ export async function assignTicket(ticketId: number, formData: FormData) {
       authorUserId: user.id,
     },
   });
+
+  revalidatePath(`/tickets/${ticketId}`);
+  revalidatePath("/tickets");
+}
+
+export async function updateTicketDueDate(ticketId: number, formData: FormData) {
+  await requireStaff();
+
+  const dueAtRaw = String(formData.get("dueAt") ?? "");
+  const dueAt = dueAtRaw ? new Date(dueAtRaw) : null;
+  if (dueAtRaw && Number.isNaN(dueAt!.getTime())) return;
+
+  await prisma.ticket.update({ where: { id: ticketId }, data: { dueAt } });
 
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");

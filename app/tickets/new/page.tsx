@@ -5,18 +5,26 @@ import { createTicket } from "../actions";
 import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { parseFieldSchema } from "@/lib/asset-fields";
+import { TicketCreateFields } from "@/components/ui/ticket-create-fields";
 
 export default async function NewTicketPage() {
   await requireStaff();
 
   const labels = await getOrgLabels();
 
-  const [boards, clients, categories] = await Promise.all([
+  const [boards, clients, categories, templates] = await Promise.all([
     prisma.board.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
+    prisma.ticketTemplate.findMany({ orderBy: { name: "asc" } }),
   ]);
+
+  const categoryOptions = categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    fields: parseFieldSchema(category.fieldSchema),
+  }));
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -24,20 +32,7 @@ export default async function NewTicketPage() {
 
       <Card className="mt-6 p-6">
         <ActionForm action={createTicket} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-fg-muted">Title</label>
-            <input
-              type="text"
-              name="title"
-              required
-              className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-fg-muted">Description</label>
-            <MarkdownEditor name="description" defaultValue="" />
-          </div>
+          <TicketCreateFields categories={categoryOptions} templates={templates} />
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -67,35 +62,6 @@ export default async function NewTicketPage() {
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-fg-muted">Priority</label>
-              <select
-                name="priority"
-                defaultValue="MEDIUM"
-                className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="EMERGENCY">Emergency</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-fg-muted">Category</label>
-              <select
-                name="categoryId"
-                className="mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg"
-              >
-                <option value="">None</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
                   </option>
                 ))}
               </select>

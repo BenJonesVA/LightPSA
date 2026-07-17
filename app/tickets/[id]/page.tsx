@@ -8,6 +8,7 @@ import {
   updateTicketStatus,
   updateTicketPriority,
   assignTicket,
+  updateTicketDueDate,
   logTime,
   logExpense,
   linkAsset,
@@ -19,6 +20,7 @@ import {
 } from "../actions";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
+import { parseFieldSchema, parseCustomFieldValues } from "@/lib/asset-fields";
 import { getOrgLabels } from "@/lib/settings";
 import { CannedResponsePicker } from "./canned-response-picker";
 import { TimerControl } from "./timer-control";
@@ -39,6 +41,13 @@ const STATUS_OPTIONS: TicketStatus[] = [
 ];
 
 const PRIORITY_OPTIONS: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "EMERGENCY"];
+
+// Formats a Date as the local "YYYY-MM-DDTHH:mm" a <input type="datetime-local">
+// expects for defaultValue — toISOString() would shift it to UTC instead.
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export default async function TicketDetailPage({
   params,
@@ -97,6 +106,14 @@ export default async function TicketDetailPage({
   const openTimer = ticket.timeLogs.find((log) => log.userId === user.id && log.endTime === null);
   const showExpenses = ticket.expensesEnabled || ticket.expenses.length > 0;
 
+  const customFieldSchema = parseFieldSchema(ticket.category?.fieldSchema);
+  const customFieldValues = parseCustomFieldValues(ticket.customFields);
+  const customFieldEntries = customFieldSchema
+    .map((field) => ({ label: field.label, value: customFieldValues[field.key] }))
+    .filter((entry) => entry.value);
+
+  const isOverdue = ticket.dueAt && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED" && ticket.dueAt < new Date();
+
   const sla =
     slaPolicy && slaPolicy.isActive && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED"
       ? getSlaStatus(ticket, slaPolicy)
@@ -116,6 +133,11 @@ export default async function TicketDetailPage({
   async function changeAssignee(formData: FormData) {
     "use server";
     await assignTicket(ticketId, formData);
+  }
+
+  async function changeDueDate(formData: FormData) {
+    "use server";
+    await updateTicketDueDate(ticketId, formData);
   }
 
   async function submitComment(formData: FormData) {
@@ -436,6 +458,12 @@ export default async function TicketDetailPage({
                 <div className="mb-1 font-medium text-fg-muted">Category</div>
                 <div className="font-medium text-fg">{ticket.category?.name ?? "—"}</div>
               </div>
+              {customFieldEntries.map((entry) => (
+                <div key={entry.label}>
+                  <div className="mb-1 font-medium text-fg-muted">{entry.label}</div>
+                  <div className="font-medium text-fg">{entry.value}</div>
+                </div>
+              ))}
               <div>
                 <div className="mb-1 font-medium text-fg-muted">Submitted by</div>
                 <div className="font-medium text-fg">
@@ -445,6 +473,13 @@ export default async function TicketDetailPage({
               <div>
                 <div className="mb-1 font-medium text-fg-muted">Created</div>
                 <div className="font-medium text-fg">{ticket.createdAt.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="mb-1 font-medium text-fg-muted">Due</div>
+                <div className={isOverdue ? "font-semibold text-red" : "font-medium text-fg"}>
+                  {ticket.dueAt ? ticket.dueAt.toLocaleString() : "—"}
+                  {isOverdue ? " — overdue" : ""}
+                </div>
               </div>
             </div>
 
@@ -503,6 +538,21 @@ export default async function TicketDetailPage({
                     </option>
                   ))}
                 </select>
+              </div>
+              <Button type="submit" variant="secondary" size="sm">
+                Update
+              </Button>
+            </form>
+
+            <form action={changeDueDate} className="mt-2 flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-fg-muted">Due date</label>
+                <input
+                  type="datetime-local"
+                  name="dueAt"
+                  defaultValue={ticket.dueAt ? toDatetimeLocalValue(ticket.dueAt) : ""}
+                  className="mt-1 w-full rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                />
               </div>
               <Button type="submit" variant="secondary" size="sm">
                 Update

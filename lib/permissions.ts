@@ -54,6 +54,11 @@ export function getPermissionCatalog(labels: Labels): { key: Permission; label: 
       description: "Create and edit reusable reply templates.",
     },
     {
+      key: Permission.MANAGE_TICKET_TEMPLATES,
+      label: "Manage ticket templates",
+      description: "Create and edit prefilled templates for new tickets.",
+    },
+    {
       key: Permission.MANAGE_BRANDING,
       label: "Manage branding",
       description: "Edit company name, logo, tagline, and org mode.",

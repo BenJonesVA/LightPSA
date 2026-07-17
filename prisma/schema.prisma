@@ -100,6 +100,7 @@ enum Permission {
   MANAGE_AUTOMATION
   MANAGE_SLA
   MANAGE_CANNED_RESPONSES
+  MANAGE_TICKET_TEMPLATES
   MANAGE_BRANDING
   MANAGE_USERS
   MANAGE_BILLING
@@ -148,6 +149,7 @@ model User {
   timeLogs         TimeLog[]
   expenses         Expense[]
   cannedResponses  CannedResponse[]
+  ticketTemplates  TicketTemplate[]
   kbArticles       KbArticle[]
   scheduledVisits  ScheduledVisit[] @relation("ScheduledVisitTechnician")
   automationAssignments AutomationRule[] @relation("AutomationActionAssignee")
@@ -218,6 +220,7 @@ model Board {
   tickets         Ticket[]
   members         BoardMember[]
   cannedResponses CannedResponse[]
+  ticketTemplates TicketTemplate[]
   kbArticles      KbArticle[]
   automationConditions AutomationRule[] @relation("AutomationConditionBoard")
 }
@@ -242,8 +245,14 @@ model Category {
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children Category[] @relation("CategoryHierarchy")
 
-  tickets    Ticket[]
-  kbArticles KbArticle[]
+  // Array of AssetFieldDef (lib/asset-fields.ts, reused as-is for tickets):
+  // admin-defined custom fields that tickets in this category present on
+  // their create form.
+  fieldSchema Json?
+
+  tickets         Ticket[]
+  kbArticles      KbArticle[]
+  ticketTemplates TicketTemplate[]
 
   @@index([parentId])
 }
@@ -285,6 +294,27 @@ model CannedResponse {
   @@index([createdById])
 }
 
+// Prefilled ticket-creation content — distinct from CannedResponse, which is
+// reply text inserted into the comment box, not the ticket itself.
+model TicketTemplate {
+  id                  String         @id @default(cuid())
+  name                String
+  boardId             String?
+  board               Board?         @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  titleTemplate       String
+  descriptionTemplate String         @db.Text
+  priority            TicketPriority @default(MEDIUM)
+  categoryId          String?
+  category            Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdById         String
+  createdBy           User           @relation(fields: [createdById], references: [id])
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([boardId])
+  @@index([categoryId])
+}
+
 // ── Tickets ────────────────────────────────────────────────
 
 model Ticket {
@@ -313,6 +343,15 @@ model Ticket {
 
   categoryId  String?
   category    Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Values keyed by AssetFieldDef.key from category.fieldSchema at the time
+  // each value was saved (lib/asset-fields.ts) — same pattern as
+  // Asset.customFields. Only set on staff-created tickets with a category;
+  // portal/email/automation-created tickets carry no custom fields.
+  customFields Json?
+  // Manually-set follow-up date, distinct from the SLA response/resolution
+  // targets computed in lib/sla.ts.
+  dueAt        DateTime?      @db.Timestamptz(3)
 
   createdAt   DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime       @updatedAt @db.Timestamptz(3)

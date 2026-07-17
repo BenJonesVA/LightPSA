@@ -1,4 +1,5 @@
 import { Permission, UserRole } from "@prisma/client";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
 import { Card } from "@/components/ui/card";
@@ -79,6 +80,11 @@ function CategoryNode({
               Save
             </Button>
           </ActionForm>
+          <Link href={`/admin/categories/${category.id}/fields`}>
+            <Button type="button" variant="secondary" size="sm">
+              Fields
+            </Button>
+          </Link>
           <form action={deleteCategory.bind(null, category.id)}>
             <Button type="submit" variant="danger" size="sm">
               Delete

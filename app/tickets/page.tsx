@@ -80,6 +80,7 @@ export default async function TicketsPage({
     priority: ticket.priority,
     assigneeName: ticket.assignee?.name ?? null,
     createdAt: ticket.createdAt.toISOString(),
+    dueAt: ticket.dueAt ? ticket.dueAt.toISOString() : null,
     sla: slaInfo(ticket),
   }));
 

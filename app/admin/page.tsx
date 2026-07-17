@@ -50,6 +50,12 @@ const SECTIONS: Section[] = [
     permission: Permission.MANAGE_CANNED_RESPONSES,
   },
   {
+    href: "/admin/ticket-templates",
+    label: "Ticket Templates",
+    description: "Prefilled content staff can start a new ticket from.",
+    permission: Permission.MANAGE_TICKET_TEMPLATES,
+  },
+  {
     href: "/boards",
     label: "Boards",
     description: "Ticket boards — create, rename, and activate/deactivate.",
