@@ -72,3 +72,29 @@ export async function deleteBoard(id: string, _prevState: DeleteActionState, _fo
   revalidatePath("/boards");
   redirect("/boards");
 }
+
+// Replaces the board's full membership set (app/tickets/page.tsx's list
+// query and app/tickets/[id]/page.tsx's assignee picker both read
+// BoardMember for RBAC scoping) — same full-replace-on-submit approach as
+// setUserClientMemberships, and the same MANAGE_BOARDS gate as the rest of
+// this file, since board membership is the same permission surface as the
+// rest of board management.
+export async function setBoardMembers(boardId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_BOARDS, UserRole.ADMIN, UserRole.MANAGER);
+
+  const userIds = formData.getAll("userIds").map(String);
+
+  await prisma.$transaction([
+    prisma.boardMember.deleteMany({ where: { boardId } }),
+    ...(userIds.length > 0
+      ? [
+          prisma.boardMember.createMany({
+            data: userIds.map((userId) => ({ boardId, userId })),
+          }),
+        ]
+      : []),
+  ]);
+
+  revalidatePath(`/boards/${boardId}`);
+  return null;
+}
