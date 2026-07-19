@@ -6,6 +6,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { FormActionState } from "@/components/ui/action-form";
 
+const CONFLICT_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+};
+
 // Open to any staff role — dispatch/scheduling is a day-to-day coordination
 // task, not an admin concern, same reasoning as Tickets/KB being open to
 // all staff rather than gated like Boards/Clients creation.
@@ -27,6 +34,30 @@ export async function createVisit(_prevState: FormActionState, formData: FormDat
   const endTime = new Date(endTimeRaw);
   if (!(endTime > startTime)) {
     return { error: "End time must be after start time." };
+  }
+
+  const force = formData.get("force") === "on";
+
+  if (!force) {
+    const conflicts = await prisma.scheduledVisit.findMany({
+      where: { technicianId, startTime: { lt: endTime }, endTime: { gt: startTime } },
+      include: { ticket: { select: { id: true, title: true } } },
+    });
+
+    if (conflicts.length > 0) {
+      const summary = conflicts
+        .map(
+          (c) =>
+            `${c.startTime.toLocaleString("en-US", CONFLICT_TIME_FORMAT)} – ${c.endTime.toLocaleString(
+              "en-US",
+              CONFLICT_TIME_FORMAT,
+            )} (TKT-${c.ticket.id} · ${c.ticket.title})`,
+        )
+        .join("; ");
+      return {
+        error: `This technician already has a conflicting visit: ${summary}. Check "Create anyway" below and resubmit to double-book.`,
+      };
+    }
   }
 
   await prisma.scheduledVisit.create({

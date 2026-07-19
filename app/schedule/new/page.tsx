@@ -100,6 +100,11 @@ export default async function NewScheduledVisitPage({
             />
           </div>
 
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
+            <input type="checkbox" name="force" className="rounded border-border-strong accent-accent" />
+            Create anyway (double-book technician if there&apos;s a conflicting visit)
+          </label>
+
           <div className="flex justify-end gap-3">
             <a href="/schedule">
               <Button type="button" variant="secondary">
