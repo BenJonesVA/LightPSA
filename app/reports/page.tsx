@@ -8,6 +8,7 @@ import { isEnterpriseMode } from "@/lib/settings";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Bar } from "@/components/ui/bar-chart";
 import { ColumnChart } from "@/components/ui/column-chart";
+import { Button } from "@/components/ui/button";
 
 const DAY_MS = 86_400_000;
 const PERIOD_DAYS = 30;
@@ -45,7 +46,12 @@ export default async function ReportsPage() {
     prisma.ticket.count({ where: { createdAt: { gte: periodStart } } }),
     prisma.ticket.findMany({
       where: { resolvedAt: { gte: periodStart } },
-      select: { createdAt: true, resolvedAt: true },
+      select: {
+        createdAt: true,
+        resolvedAt: true,
+        assigneeId: true,
+        assignee: { select: { name: true } },
+      },
     }),
     prisma.slaPolicy.findMany({ where: { isActive: true } }),
     prisma.ticket.findMany({
@@ -57,6 +63,8 @@ export default async function ReportsPage() {
         resolvedAt: true,
         waitingSince: true,
         totalWaitMinutes: true,
+        categoryId: true,
+        category: { select: { name: true } },
         comments: { select: { createdAt: true, authorUserId: true, isInternal: true } },
       },
     }),
@@ -133,6 +141,41 @@ export default async function ReportsPage() {
     .sort((a, b) => b.totalMinutes - a.totalMinutes);
   const maxUtilMinutes = Math.max(1, ...utilization.map((u) => u.totalMinutes));
 
+  // ── Per-agent leaderboard (tickets resolved/closed + billable hours in the window) ──
+  const resolvedCountByUser = new Map<string, { name: string; count: number }>();
+  for (const t of resolvedInPeriodForAvg) {
+    if (!t.assigneeId) continue;
+    const entry = resolvedCountByUser.get(t.assigneeId) ?? { name: t.assignee?.name ?? "Unknown", count: 0 };
+    entry.count += 1;
+    resolvedCountByUser.set(t.assigneeId, entry);
+  }
+  const leaderboardUserIds = new Set([...resolvedCountByUser.keys(), ...utilByUser.keys()]);
+  const leaderboard = Array.from(leaderboardUserIds)
+    .map((userId) => {
+      const resolved = resolvedCountByUser.get(userId);
+      const util = utilByUser.get(userId);
+      return {
+        userId,
+        name: resolved?.name ?? util?.name ?? "Unknown",
+        resolvedCount: resolved?.count ?? 0,
+        billableMinutes: util?.billableMinutes ?? 0,
+      };
+    })
+    .sort((a, b) => b.resolvedCount - a.resolvedCount || b.billableMinutes - a.billableMinutes);
+
+  // ── Ticket volume by category (tickets created in the window) ──
+  const categoryCounts = new Map<string, { name: string; count: number }>();
+  for (const t of ticketsCreatedInPeriod) {
+    const key = t.categoryId ?? "uncategorized";
+    const name = t.category?.name ?? "Uncategorized";
+    const entry = categoryCounts.get(key) ?? { name, count: 0 };
+    entry.count += 1;
+    categoryCounts.set(key, entry);
+  }
+  const categoryBreakdown = Array.from(categoryCounts.entries())
+    .map(([categoryId, v]) => ({ categoryId, ...v }))
+    .sort((a, b) => b.count - a.count);
+
   // ── Retainer contract consumption, current period, across all clients ──
   const contractUsage = await Promise.all(
     retainerContracts.map(async (contract) => {
@@ -176,9 +219,14 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-[24px] font-bold tracking-tight text-fg">Reports</h1>
-        <p className="mt-[3px] text-[13.5px] text-fg-muted">Last {PERIOD_DAYS} days, unless noted.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight text-fg">Reports</h1>
+          <p className="mt-[3px] text-[13.5px] text-fg-muted">Last {PERIOD_DAYS} days, unless noted.</p>
+        </div>
+        <a href="/reports/export">
+          <Button variant="secondary">Export CSV</Button>
+        </a>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -252,6 +300,60 @@ export default async function ReportsPage() {
               />
             ))}
           </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-[13.5px] font-semibold text-fg">Agent leaderboard</h2>
+        </CardHeader>
+        {leaderboard.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-fg-muted">No resolved tickets or time logged in this window.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+                <th className="px-5 py-2.5">Agent</th>
+                <th className="px-5 py-2.5">Resolved / closed</th>
+                <th className="px-5 py-2.5">Billable hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.map((agent) => (
+                <tr key={agent.userId} className="border-b border-grid last:border-0">
+                  <td className="px-5 py-3 font-medium text-fg">{agent.name}</td>
+                  <td className="px-5 py-3 font-mono text-fg-muted">{agent.resolvedCount}</td>
+                  <td className="px-5 py-3 font-mono text-fg-muted">{(agent.billableMinutes / 60).toFixed(1)}h</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-[13.5px] font-semibold text-fg">Ticket volume by category</h2>
+        </CardHeader>
+        {categoryBreakdown.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-fg-muted">No tickets created in this window.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+                <th className="px-5 py-2.5">Category</th>
+                <th className="px-5 py-2.5">Tickets created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categoryBreakdown.map((c) => (
+                <tr key={c.categoryId} className="border-b border-grid last:border-0">
+                  <td className="px-5 py-3 font-medium text-fg">{c.name}</td>
+                  <td className="px-5 py-3 font-mono text-fg-muted">{c.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </Card>
 
