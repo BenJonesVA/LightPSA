@@ -85,9 +85,14 @@ export default async function BillingPage() {
             Unlocked time entries and expenses awaiting approval and invoicing.
           </p>
         </div>
-        <a href="/billing/export">
-          <Button variant="secondary">Export CSV (locked entries)</Button>
-        </a>
+        <div className="flex gap-2">
+          <a href="/billing/export">
+            <Button variant="secondary">Export CSV (locked entries)</Button>
+          </a>
+          <a href="/invoices/new">
+            <Button variant="primary">Generate invoice</Button>
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
