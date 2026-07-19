@@ -50,6 +50,7 @@ function manageLinks(isEnterprise: boolean, role: UserRole | undefined, permissi
     links.push({ href: "/admin", label: "Admin" });
   }
   if (!isEnterprise && has(Permission.MANAGE_BILLING)) links.push({ href: "/billing", label: "Billing" });
+  if (!isEnterprise && has(Permission.MANAGE_BILLING)) links.push({ href: "/invoices", label: "Invoices" });
   if (has(Permission.MANAGE_AUTOMATION)) links.push({ href: "/automation", label: "Automation" });
   if (has(Permission.MANAGE_SLA)) links.push({ href: "/admin/sla", label: "SLA Policies" });
   if (has(Permission.MANAGE_CATEGORIES)) links.push({ href: "/admin/categories", label: "Categories" });
