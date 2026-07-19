@@ -62,9 +62,11 @@ trusting any of it in front of a real user.
   (`app/tickets/page.tsx`) and the assignee picker
   (`app/tickets/[id]/page.tsx`) — falls back to unrestricted if the user
   has zero board memberships configured, so an unconfigured board doesn't
-  become a dead end. **Still no admin UI to manage `BoardMember` rows** —
-  the model and RBAC are live, but nothing in the app lets you actually
-  assign a user to a board yet (Prisma Studio/seed-only for now).
+  become a dead end. Admin UI: a "Members" checkbox card on
+  `app/boards/[id]/page.tsx` (`setBoardMembers` in `app/boards/actions.ts`),
+  gated the same way as the rest of board management
+  (`MANAGE_BOARDS`/ADMIN/MANAGER) — the board-side counterpart to
+  `ClientMember`'s user-side UI below.
 - **Client/Department RBAC (`ClientMember`, added after the original batch,
   not in the initial gap analysis).** ✅ Same shape as Board RBAC, one
   dimension over: which clients'/departments' tickets a tech can see and be
@@ -101,18 +103,20 @@ trusting any of it in front of a real user.
 - **RMM/monitoring auto-ticketing.** ✅ `POST /api/integrations/monitoring`,
   `TicketSource.MONITORING`, generic `ApiKey` model (SHA-256 lookup hash,
   not bcrypt — it's a machine credential looked up by exact hash, not a
-  login password). **No admin UI to create/rotate `ApiKey` rows yet** —
-  someone has to insert one directly via Prisma Studio/a script
-  (`lib/api-keys.ts`'s `hashApiKey()`) until that's built.
+  login password). Admin UI: `app/admin/api-keys/` (ADMIN-only, no
+  `Permission` bypass — same reasoning as Permission Groups, since this
+  mints a credential capable of filing tickets via the API). Create shows
+  the raw key exactly once via a `?newKey=` redirect param (only the hash
+  is ever persisted) with an explicit "copy it now" banner; existing keys
+  can be toggled active/inactive or deleted from the same page.
 - **Invoice model.** ✅ `Invoice`/`InvoiceLineItem`, `app/invoices/**`
   (list/generate/detail), a "Generate invoice" entry point on
   `app/billing/page.tsx`. Rate resolution ladder (exact role+workType
   `ContractRate` → workType-only → role-only → contract-wide →
   `Contract.defaultHourlyRate` → unresolved/skipped) had to be designed
   from scratch — no dollar-amount-per-TimeLog logic existed anywhere
-  before this. **No nav link yet** (`components/nav-shell.tsx` was owned by
-  the notifications work in the same batch) — reachable today only via the
-  Billing page's "Generate invoice" button.
+  before this. Nav link added (`components/nav-shell.tsx`, same
+  `MANAGE_BILLING`-gated / hidden-in-Enterprise treatment as Billing).
 - **Client resolution-confirm / reopen window.** ✅ Piggybacked on the
   existing CSAT close-email (`lib/csat.ts`) — a "Still having this issue?"
   link keyed by the `CsatResponse.id` token hits `GET
