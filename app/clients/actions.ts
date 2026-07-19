@@ -1,6 +1,6 @@
 "use server";
 
-import { Permission, Prisma, UserRole } from "@prisma/client";
+import { Permission, Prisma, TicketPriority, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -140,4 +140,47 @@ export async function createAsset(clientId: string, _prevState: FormActionState,
 
   revalidatePath(`/clients/${clientId}`);
   return null;
+}
+
+// Creates or updates this client's per-priority SLA override. lib/sla.ts's
+// resolveSlaPolicy checks for an active row here before falling back to the
+// org-wide SlaPolicy — see app/admin/sla for the equivalent global-policy form.
+export async function upsertClientSlaPolicy(
+  clientId: string,
+  priority: TicketPriority,
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
+
+  const responseTargetMinutes = Number(formData.get("responseTargetMinutes"));
+  const resolutionTargetMinutes = Number(formData.get("resolutionTargetMinutes"));
+
+  if (
+    !Number.isInteger(responseTargetMinutes) ||
+    responseTargetMinutes <= 0 ||
+    !Number.isInteger(resolutionTargetMinutes) ||
+    resolutionTargetMinutes <= 0
+  ) {
+    return { error: "Response and resolution targets must be positive whole numbers of minutes" };
+  }
+
+  await prisma.clientSlaPolicy.upsert({
+    where: { clientId_priority: { clientId, priority } },
+    create: { clientId, priority, responseTargetMinutes, resolutionTargetMinutes, isActive: true },
+    update: { responseTargetMinutes, resolutionTargetMinutes, isActive: true },
+  });
+
+  revalidatePath(`/clients/${clientId}`);
+  return null;
+}
+
+// Removes this client's override for one priority — after this, SLA status
+// for that priority falls back to the org-wide SlaPolicy again.
+export async function deleteClientSlaPolicy(clientId: string, priority: TicketPriority) {
+  await requirePermission(Permission.MANAGE_CLIENTS, UserRole.ADMIN, UserRole.MANAGER);
+
+  await prisma.clientSlaPolicy.deleteMany({ where: { clientId, priority } });
+
+  revalidatePath(`/clients/${clientId}`);
 }

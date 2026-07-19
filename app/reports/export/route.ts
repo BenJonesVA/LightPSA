@@ -1,7 +1,7 @@
 import { UserRole, ContractType, Permission, type TicketPriority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
-import { getSlaStatus } from "@/lib/sla";
+import { getSlaStatus, loadSlaPolicyResolver } from "@/lib/sla";
 
 const DAY_MS = 86_400_000;
 const PERIOD_DAYS = 30;
@@ -32,7 +32,7 @@ export async function GET() {
   const now = new Date();
   const periodStart = new Date(now.getTime() - PERIOD_DAYS * DAY_MS);
 
-  const [createdInPeriod, resolvedInPeriod, slaPolicies, ticketsCreatedInPeriod, timeLogsInPeriod] =
+  const [createdInPeriod, resolvedInPeriod, ticketsCreatedInPeriod, timeLogsInPeriod] =
     await Promise.all([
       prisma.ticket.count({ where: { createdAt: { gte: periodStart } } }),
       prisma.ticket.findMany({
@@ -43,10 +43,10 @@ export async function GET() {
           assignee: { select: { name: true } },
         },
       }),
-      prisma.slaPolicy.findMany({ where: { isActive: true } }),
       prisma.ticket.findMany({
         where: { createdAt: { gte: periodStart } },
         select: {
+          clientId: true,
           status: true,
           priority: true,
           createdAt: true,
@@ -65,16 +65,15 @@ export async function GET() {
     ]);
 
   // ── SLA compliance by priority (tickets created in the window) ──
-  const policyByPriority = new Map(slaPolicies.map((p) => [p.priority, p]));
+  const resolveSla = await loadSlaPolicyResolver(ticketsCreatedInPeriod.map((t) => t.clientId));
   const priorityStats = PRIORITY_ORDER.map((priority) => {
     const tickets = ticketsCreatedInPeriod.filter((t) => t.priority === priority);
-    const policy = policyByPriority.get(priority);
-    const onTime = policy
-      ? tickets.filter((t) => {
-          const status = getSlaStatus(t, policy, now);
-          return !status.responseBreached && !status.resolutionBreached;
-        }).length
-      : 0;
+    const onTime = tickets.filter((t) => {
+      const policy = resolveSla(t.clientId, priority);
+      if (!policy) return false;
+      const status = getSlaStatus(t, policy, now);
+      return !status.responseBreached && !status.resolutionBreached;
+    }).length;
     return {
       priority,
       total: tickets.length,

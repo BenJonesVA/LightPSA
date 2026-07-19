@@ -1,20 +1,36 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ContractType, Permission, UserRole } from "@prisma/client";
+import { ContractType, Permission, TicketPriority, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
 import { getSettings, orgLabels } from "@/lib/settings";
 import { parseFieldSchema } from "@/lib/asset-fields";
-import { createContact, createAsset, updateClient, deleteClient } from "../actions";
+import {
+  createContact,
+  createAsset,
+  updateClient,
+  deleteClient,
+  upsertClientSlaPolicy,
+  deleteClientSlaPolicy,
+} from "../actions";
 import { ActionForm } from "@/components/ui/action-form";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { StatusBadge } from "@/components/ui/badge";
+import { StatusBadge, PriorityBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { AssetCategoryFields } from "@/components/ui/asset-category-fields";
 
 const PERIOD_DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+
+const SLA_PRIORITY_ORDER: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "EMERGENCY"];
+
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
 
 const CONTRACT_TYPE_STYLES: Record<string, { fg: string; bg: string }> = {
   RETAINER: { fg: "text-blue", bg: "bg-blue-bg" },
@@ -96,6 +112,13 @@ export default async function ClientDetailPage({
     name: category.name,
     fields: parseFieldSchema(category.fieldSchema),
   }));
+
+  const [clientSlaPolicies, globalSlaPolicies] = await Promise.all([
+    prisma.clientSlaPolicy.findMany({ where: { clientId: client.id } }),
+    prisma.slaPolicy.findMany(),
+  ]);
+  const clientSlaByPriority = new Map(clientSlaPolicies.map((p) => [p.priority, p]));
+  const globalSlaByPriority = new Map(globalSlaPolicies.map((p) => [p.priority, p]));
 
   const createContactForClient = createContact.bind(null, client.id);
   const createAssetForClient = createAsset.bind(null, client.id);
@@ -354,6 +377,104 @@ export default async function ClientDetailPage({
             )}
           </tbody>
         </table>
+      </Card>
+      )}
+
+      {/* SLA overrides */}
+      {canManage && (
+      <Card>
+        <CardHeader>
+          <h2 className="text-[13.5px] font-semibold text-fg">SLA overrides</h2>
+        </CardHeader>
+        <div className="flex flex-col divide-y divide-grid">
+          {SLA_PRIORITY_ORDER.map((priority) => {
+            const override = clientSlaByPriority.get(priority);
+            const hasOverride = Boolean(override?.isActive);
+            const globalPolicy = globalSlaByPriority.get(priority);
+            const upsertForPriority = upsertClientSlaPolicy.bind(null, client.id, priority);
+
+            if (hasOverride && override) {
+              return (
+                <div key={priority} className="p-4">
+                  <ActionForm action={upsertForPriority} className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <PriorityBadge priority={priority} />
+                      <span className="rounded-full bg-violet-bg px-2 py-0.5 text-[10.5px] font-semibold text-violet">
+                        Overridden
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">
+                          Response target (minutes)
+                        </span>
+                        <input
+                          type="number"
+                          name="responseTargetMinutes"
+                          min={1}
+                          required
+                          defaultValue={override.responseTargetMinutes}
+                          className="w-full rounded-lg border border-border-strong bg-surface px-3 py-[7px] text-[13.5px] text-fg focus:outline-none focus:ring-2 focus:ring-focus"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11.5px] font-medium text-fg-subtle">
+                          Resolution target (minutes)
+                        </span>
+                        <input
+                          type="number"
+                          name="resolutionTargetMinutes"
+                          min={1}
+                          required
+                          defaultValue={override.resolutionTargetMinutes}
+                          className="w-full rounded-lg border border-border-strong bg-surface px-3 py-[7px] text-[13.5px] text-fg focus:outline-none focus:ring-2 focus:ring-focus"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" variant="primary" size="sm">
+                        Save
+                      </Button>
+                    </div>
+                  </ActionForm>
+                  <form action={deleteClientSlaPolicy.bind(null, client.id, priority)} className="mt-2 flex justify-end">
+                    <Button type="submit" variant="ghost" size="sm">
+                      Remove override
+                    </Button>
+                  </form>
+                </div>
+              );
+            }
+
+            return (
+              <div key={priority} className="flex items-center justify-between gap-3 p-4">
+                <div className="flex items-center gap-3">
+                  <PriorityBadge priority={priority} />
+                  <span className="text-xs text-fg-subtle">
+                    {globalPolicy
+                      ? `Using global default (${formatMinutes(globalPolicy.responseTargetMinutes)} response / ${formatMinutes(globalPolicy.resolutionTargetMinutes)} resolution)`
+                      : "No global default configured"}
+                  </span>
+                </div>
+                <ActionForm action={upsertForPriority}>
+                  <input
+                    type="hidden"
+                    name="responseTargetMinutes"
+                    value={globalPolicy?.responseTargetMinutes ?? 60}
+                  />
+                  <input
+                    type="hidden"
+                    name="resolutionTargetMinutes"
+                    value={globalPolicy?.resolutionTargetMinutes ?? 480}
+                  />
+                  <Button type="submit" variant="secondary" size="sm">
+                    Override
+                  </Button>
+                </ActionForm>
+              </div>
+            );
+          })}
+        </div>
       </Card>
       )}
 

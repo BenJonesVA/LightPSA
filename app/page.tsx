@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getSlaStatus } from "@/lib/sla";
+import { getSlaStatus, loadSlaPolicyResolver } from "@/lib/sla";
 import { requireStaff } from "@/lib/rbac";
 import { getOrgLabels } from "@/lib/settings";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -45,7 +45,6 @@ export default async function DashboardPage() {
   const [
     activeClientCount,
     boards,
-    policies,
     openTickets,
     unassignedCount,
     createdForTrend,
@@ -58,10 +57,10 @@ export default async function DashboardPage() {
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    prisma.slaPolicy.findMany({ where: { isActive: true } }),
     prisma.ticket.findMany({
       where: { status: { in: [...OPEN_STATUSES] } },
       select: {
+        clientId: true,
         status: true,
         priority: true,
         createdAt: true,
@@ -106,9 +105,9 @@ export default async function DashboardPage() {
     )
   );
 
-  const policyByPriority = new Map(policies.map((p) => [p.priority, p]));
+  const resolveSla = await loadSlaPolicyResolver(openTickets.map((t) => t.clientId));
   const breachedCount = openTickets.filter((t) => {
-    const policy = policyByPriority.get(t.priority);
+    const policy = resolveSla(t.clientId, t.priority);
     if (!policy) return false;
     const status = getSlaStatus(t, policy);
     return status.responseBreached || status.resolutionBreached;

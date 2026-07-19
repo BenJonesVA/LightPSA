@@ -1,6 +1,6 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSlaStatus } from "@/lib/sla";
+import { getSlaStatus, loadSlaPolicyResolver } from "@/lib/sla";
 import { sendEmail } from "@/lib/email";
 import { assertCronAuthorized, CronAuthError } from "@/lib/cron-auth";
 
@@ -31,8 +31,7 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
-  const [policies, tickets, staff] = await Promise.all([
-    prisma.slaPolicy.findMany({ where: { isActive: true } }),
+  const [tickets, staff] = await Promise.all([
     prisma.ticket.findMany({
       where: { status: { notIn: ["RESOLVED", "CLOSED"] } },
       select: {
@@ -44,6 +43,7 @@ export async function GET(request: Request) {
         waitingSince: true,
         totalWaitMinutes: true,
         priority: true,
+        clientId: true,
         comments: { select: { createdAt: true, authorUserId: true, isInternal: true, body: true } },
       },
     }),
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  const policyByPriority = new Map(policies.map((p) => [p.priority, p]));
+  const resolveSla = await loadSlaPolicyResolver(tickets.map((t) => t.clientId));
   const staffEmails = staff.map((s) => s.email);
 
   let alertsSent = 0;
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
   }
 
   for (const ticket of tickets) {
-    const policy = policyByPriority.get(ticket.priority);
+    const policy = resolveSla(ticket.clientId, ticket.priority);
     if (!policy) continue;
 
     const status = getSlaStatus(ticket, policy, now);

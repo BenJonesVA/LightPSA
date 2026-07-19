@@ -26,7 +26,7 @@ import {
   unlinkTicket,
 } from "../actions";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
-import { getSlaStatus } from "@/lib/sla";
+import { getSlaStatus, resolveSlaPolicy } from "@/lib/sla";
 import { parseFieldSchema, parseCustomFieldValues } from "@/lib/asset-fields";
 import { getOrgLabels } from "@/lib/settings";
 import { CannedResponsePicker } from "./canned-response-picker";
@@ -108,7 +108,7 @@ export default async function TicketDetailPage({
   if (!ticket) notFound();
 
   const [slaPolicy, cannedResponses, clientAssets, candidateKbArticles, boardMembers, auditLogs] = await Promise.all([
-    prisma.slaPolicy.findUnique({ where: { priority: ticket.priority } }),
+    resolveSlaPolicy(ticket.clientId, ticket.priority),
     prisma.cannedResponse.findMany({
       where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
       select: { id: true, title: true, body: true },
@@ -165,7 +165,7 @@ export default async function TicketDetailPage({
   const isOverdue = ticket.dueAt && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED" && ticket.dueAt < new Date();
 
   const sla =
-    slaPolicy && slaPolicy.isActive && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED"
+    slaPolicy && ticket.status !== "RESOLVED" && ticket.status !== "CLOSED"
       ? getSlaStatus(ticket, slaPolicy)
       : null;
 

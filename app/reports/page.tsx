@@ -1,7 +1,7 @@
 import { UserRole, ContractType, Permission, type TicketPriority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
-import { getSlaStatus } from "@/lib/sla";
+import { getSlaStatus, loadSlaPolicyResolver } from "@/lib/sla";
 import { getCurrentBillingPeriod } from "@/lib/billing-period";
 import { formatDuration } from "@/lib/format";
 import { isEnterpriseMode } from "@/lib/settings";
@@ -35,7 +35,6 @@ export default async function ReportsPage() {
   const [
     createdInPeriod,
     resolvedInPeriodForAvg,
-    slaPolicies,
     ticketsCreatedInPeriod,
     timeLogsInPeriod,
     retainerContracts,
@@ -53,10 +52,10 @@ export default async function ReportsPage() {
         assignee: { select: { name: true } },
       },
     }),
-    prisma.slaPolicy.findMany({ where: { isActive: true } }),
     prisma.ticket.findMany({
       where: { createdAt: { gte: periodStart } },
       select: {
+        clientId: true,
         status: true,
         priority: true,
         createdAt: true,
@@ -106,16 +105,15 @@ export default async function ReportsPage() {
       : null;
 
   // ── SLA compliance (tickets created in the window) ──
-  const policyByPriority = new Map(slaPolicies.map((p) => [p.priority, p]));
+  const resolveSla = await loadSlaPolicyResolver(ticketsCreatedInPeriod.map((t) => t.clientId));
   const priorityStats = PRIORITY_ORDER.map((priority) => {
     const tickets = ticketsCreatedInPeriod.filter((t) => t.priority === priority);
-    const policy = policyByPriority.get(priority);
-    const onTime = policy
-      ? tickets.filter((t) => {
-          const status = getSlaStatus(t, policy, now);
-          return !status.responseBreached && !status.resolutionBreached;
-        }).length
-      : 0;
+    const onTime = tickets.filter((t) => {
+      const policy = resolveSla(t.clientId, priority);
+      if (!policy) return false;
+      const status = getSlaStatus(t, policy, now);
+      return !status.responseBreached && !status.resolutionBreached;
+    }).length;
     return {
       priority,
       total: tickets.length,

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
-import type { Prisma, SlaPolicy, TicketPriority, TicketStatus } from "@prisma/client";
-import { getSlaStatus } from "@/lib/sla";
+import type { Prisma, TicketPriority, TicketStatus } from "@prisma/client";
+import { getSlaStatus, loadSlaPolicyResolver } from "@/lib/sla";
 import { getOrgLabels } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { bulkUpdateTickets, bulkAssignTickets } from "./actions";
@@ -80,7 +80,7 @@ export default async function TicketsPage({
     }
   }
 
-  const [tickets, policies, assignableUsers, savedFilters] = await Promise.all([
+  const [tickets, assignableUsers, savedFilters] = await Promise.all([
     prisma.ticket.findMany({
       where,
       include: {
@@ -91,19 +91,18 @@ export default async function TicketsPage({
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.slaPolicy.findMany(),
     prisma.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.savedTicketFilter.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }),
   ]);
 
-  const policyByPriority = new Map<TicketPriority, SlaPolicy>(policies.map((p) => [p.priority, p]));
+  const resolveSla = await loadSlaPolicyResolver(tickets.map((t) => t.clientId));
 
   function slaInfo(ticket: (typeof tickets)[number]): TicketRow["sla"] {
     if (ticket.status === "RESOLVED" || ticket.status === "CLOSED") {
       return { text: "—", tone: "subtle" };
     }
-    const policy = policyByPriority.get(ticket.priority);
-    if (!policy || !policy.isActive) {
+    const policy = resolveSla(ticket.clientId, ticket.priority);
+    if (!policy) {
       return { text: "No policy", tone: "subtle" };
     }
     const sla = getSlaStatus(ticket, policy);
