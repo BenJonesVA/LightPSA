@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     }),
     prisma.user.findMany({
       where: { role: { in: [UserRole.ADMIN, UserRole.MANAGER] }, isActive: true },
-      select: { email: true },
+      select: { id: true, email: true },
     }),
   ]);
 
@@ -64,6 +64,16 @@ export async function GET(request: Request) {
     });
     if (staffEmails.length > 0) {
       await sendEmail({ to: staffEmails, subject, html: `<p>${message}</p>` });
+    }
+    if (staff.length > 0) {
+      await prisma.notification.createMany({
+        data: staff.map((s) => ({
+          userId: s.id,
+          ticketId,
+          type: "SLA_BREACH" as const,
+          message,
+        })),
+      });
     }
     alertsSent++;
   }

@@ -111,6 +111,19 @@ export async function runAutomationRules(
               : `[Automation] Rule "${rule.name}" tried to send an email notification to ${contact.email} but it did not go out: ${result.reason}.`,
           },
         });
+
+        if (ticket.assigneeId) {
+          await prisma.notification.create({
+            data: {
+              userId: ticket.assigneeId,
+              ticketId: ticket.id,
+              type: "AUTOMATION_ALERT",
+              message: result.sent
+                ? `Automation rule "${rule.name}" emailed the client on TKT-${ticket.id}.`
+                : `Automation rule "${rule.name}" tried to email the client on TKT-${ticket.id} but it failed.`,
+            },
+          });
+        }
         break;
       }
     }

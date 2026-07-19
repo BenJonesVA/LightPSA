@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DensityToggle } from "@/components/density-toggle";
+import { NotificationBell } from "@/components/notification-bell";
 
 function workspaceLinks(isEnterprise: boolean) {
   return [
@@ -177,6 +178,7 @@ export async function NavShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-14 flex-none items-center gap-4 border-b border-border bg-surface px-[22px]">
           <div className="ml-auto flex items-center gap-[10px]">
+            <NotificationBell />
             <DensityToggle />
             <ThemeToggle />
           </div>

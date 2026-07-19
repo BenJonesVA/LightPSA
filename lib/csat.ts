@@ -17,6 +17,27 @@ export async function triggerCsatSurvey(ticket: TicketForCsat): Promise<void> {
 
   const csat = await prisma.csatResponse.create({ data: { ticketId: ticket.id } });
 
+  // Fetched separately rather than widening TicketForCsat's shape — the
+  // caller (updateTicketStatus) already passes exactly the fields it has to
+  // hand, and this is the only site that needs assigneeId, purely to address
+  // the internal Notification below.
+  const assignee = await prisma.ticket.findUnique({
+    where: { id: ticket.id },
+    select: { assigneeId: true },
+  });
+
+  async function notifyAssignee(message: string) {
+    if (!assignee?.assigneeId) return;
+    await prisma.notification.create({
+      data: {
+        userId: assignee.assigneeId,
+        ticketId: ticket.id,
+        type: "TICKET_UPDATED",
+        message,
+      },
+    });
+  }
+
   const contact = ticket.contactId
     ? await prisma.contact.findUnique({ where: { id: ticket.contactId }, select: { email: true } })
     : null;
@@ -29,16 +50,18 @@ export async function triggerCsatSurvey(ticket: TicketForCsat): Promise<void> {
         body: `[CSAT] Ticket TKT-${ticket.id} closed, but there's no client contact on file to send a survey to.`,
       },
     });
+    await notifyAssignee(`TKT-${ticket.id} closed — no client contact on file for a CSAT survey.`);
     return;
   }
 
   const baseUrl = process.env.APP_URL ?? "http://localhost:3131";
   const surveyUrl = `${baseUrl}/csat/${csat.id}`;
+  const reopenUrl = `${baseUrl}/api/tickets/reopen?token=${csat.id}`;
 
   const result = await sendEmail({
     to: contact.email,
     subject: `How did we do on TKT-${ticket.id}: ${ticket.title}?`,
-    html: `<p>Your ticket <strong>TKT-${ticket.id}: ${ticket.title}</strong> has been closed.</p><p>We'd appreciate a quick rating: <a href="${surveyUrl}">${surveyUrl}</a></p>`,
+    html: `<p>Your ticket <strong>TKT-${ticket.id}: ${ticket.title}</strong> has been closed.</p><p>We'd appreciate a quick rating: <a href="${surveyUrl}">${surveyUrl}</a></p><p>Still having this issue? <a href="${reopenUrl}">Reopen this ticket</a>.</p>`,
   });
 
   await prisma.csatResponse.update({
@@ -55,4 +78,10 @@ export async function triggerCsatSurvey(ticket: TicketForCsat): Promise<void> {
         : `[CSAT] Tried to send a survey to ${contact.email} but it did not go out: ${result.reason}.`,
     },
   });
+
+  await notifyAssignee(
+    result.sent
+      ? `TKT-${ticket.id} closed — CSAT survey sent to ${contact.email}.`
+      : `TKT-${ticket.id} closed — CSAT survey to ${contact.email} did not go out.`
+  );
 }
