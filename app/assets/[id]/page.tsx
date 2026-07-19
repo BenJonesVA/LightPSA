@@ -7,7 +7,7 @@ import { getOrgLabels } from "@/lib/settings";
 import { parseFieldSchema, parseCustomFieldValues } from "@/lib/asset-fields";
 import { updateAsset, deleteAsset } from "../actions";
 import { ActionForm } from "@/components/ui/action-form";
-import { StatusBadge } from "@/components/ui/badge";
+import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { DeleteButton } from "@/components/ui/delete-button";
@@ -39,7 +39,7 @@ export default async function AssetDetailPage({
   const [ticketAssets, categories, clients] = await Promise.all([
     prisma.ticketAsset.findMany({
       where: { assetId: id },
-      include: { ticket: { include: { board: true } } },
+      include: { ticket: { select: { id: true, title: true, status: true, priority: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
@@ -183,9 +183,11 @@ export default async function AssetDetailPage({
                   TKT-{ticket.id}
                 </Link>{" "}
                 <span className="text-fg-muted">{ticket.title}</span>
-                <div className="text-xs text-fg-subtle">{ticket.board.name}</div>
               </div>
-              <StatusBadge status={ticket.status} />
+              <div className="flex items-center gap-4">
+                <PriorityBadge priority={ticket.priority} />
+                <StatusBadge status={ticket.status} />
+              </div>
             </li>
           ))}
           {ticketAssets.length === 0 && (
