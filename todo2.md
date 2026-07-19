@@ -62,7 +62,18 @@ trusting any of it in front of a real user.
   (`app/tickets/page.tsx`) and the assignee picker
   (`app/tickets/[id]/page.tsx`) — falls back to unrestricted if the user
   has zero board memberships configured, so an unconfigured board doesn't
-  become a dead end.
+  become a dead end. **Still no admin UI to manage `BoardMember` rows** —
+  the model and RBAC are live, but nothing in the app lets you actually
+  assign a user to a board yet (Prisma Studio/seed-only for now).
+- **Client/Department RBAC (`ClientMember`, added after the original batch,
+  not in the initial gap analysis).** ✅ Same shape as Board RBAC, one
+  dimension over: which clients'/departments' tickets a tech can see and be
+  assigned. AND-composes with board scoping (both apply if both are
+  configured). This is what makes ENTERPRISE org mode's "Departments"
+  actually usable — e.g. scoping HR's staff to only HR's tickets while
+  IT's staff only see IT's — and is equally useful in MSP mode to restrict
+  a tech to their assigned customers. Management UI: a per-user
+  "Clients"/"Departments" checkbox card on `app/admin/users/[id]/page.tsx`.
 - **Structured audit log.** ✅ `TicketAuditLog` model, written alongside
   (not instead of) the existing synthetic `TicketComment` audit trail in
   `updateTicketStatus`/`updateTicketPriority`/`assignTicket`. "History" card
