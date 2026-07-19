@@ -5,7 +5,8 @@ import type { Prisma, SlaPolicy, TicketPriority, TicketStatus } from "@prisma/cl
 import { getSlaStatus } from "@/lib/sla";
 import { getOrgLabels } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
-import { bulkUpdateTickets } from "./actions";
+import { bulkUpdateTickets, bulkAssignTickets } from "./actions";
+import { saveTicketFilter, deleteTicketFilter } from "./saved-views-actions";
 import { TicketsTable, type TicketRow } from "./tickets-table";
 
 const STATUS_OPTIONS: TicketStatus[] = [
@@ -23,7 +24,7 @@ export default async function TicketsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await requireStaff();
+  const user = await requireStaff();
 
   const labels = await getOrgLabels();
 
@@ -33,15 +34,53 @@ export default async function TicketsPage({
   const priority =
     typeof params.priority === "string" ? (params.priority as TicketPriority) : undefined;
   const clientId = typeof params.clientId === "string" ? params.clientId : undefined;
+  const q = typeof params.q === "string" ? params.q.trim() : undefined;
+
+  // Kept as a plain string map (rather than reusing `where`) so it can be
+  // serialized straight into SavedTicketFilter.query and back into a
+  // /tickets?... querystring without carrying any Prisma-specific shape.
+  const currentQuery: Record<string, string> = {
+    ...(boardId ? { boardId } : {}),
+    ...(status ? { status } : {}),
+    ...(priority ? { priority } : {}),
+    ...(clientId ? { clientId } : {}),
+    ...(q ? { q } : {}),
+  };
 
   const where: Prisma.TicketWhereInput = {
     ...(boardId ? { boardId } : {}),
     ...(status ? { status } : {}),
     ...(priority ? { priority } : {}),
     ...(clientId ? { clientId } : {}),
+    ...(q
+      ? {
+          OR: [
+            { title: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
-  const [tickets, policies] = await Promise.all([
+  // Board-scoped RBAC: ADMIN/MANAGER see everything. Other roles are
+  // restricted to boards they're a member of — unless they have zero
+  // memberships configured, in which case restricting would silently show
+  // an empty list, so we fall back to showing everything instead.
+  if (user.role !== "ADMIN" && user.role !== "MANAGER") {
+    const memberships = await prisma.boardMember.findMany({
+      where: { userId: user.id },
+      select: { boardId: true },
+    });
+    if (memberships.length > 0) {
+      const allowedBoardIds = memberships.map((m) => m.boardId);
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { boardId: { in: allowedBoardIds } },
+      ];
+    }
+  }
+
+  const [tickets, policies, assignableUsers, savedFilters] = await Promise.all([
     prisma.ticket.findMany({
       where,
       include: {
@@ -53,6 +92,8 @@ export default async function TicketsPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.slaPolicy.findMany(),
+    prisma.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.savedTicketFilter.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }),
   ]);
 
   const policyByPriority = new Map<TicketPriority, SlaPolicy>(policies.map((p) => [p.priority, p]));
@@ -84,6 +125,30 @@ export default async function TicketsPage({
     sla: slaInfo(ticket),
   }));
 
+  function savedFilterHref(query: Prisma.JsonValue): string {
+    const entries = query && typeof query === "object" && !Array.isArray(query) ? query : {};
+    const sp = new URLSearchParams();
+    for (const [key, value] of Object.entries(entries as Record<string, unknown>)) {
+      if (typeof value === "string" && value) sp.set(key, value);
+    }
+    const qs = sp.toString();
+    return qs ? `/tickets?${qs}` : "/tickets";
+  }
+
+  async function saveCurrentFilter(formData: FormData) {
+    "use server";
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return;
+    await saveTicketFilter(name, currentQuery);
+  }
+
+  async function deleteSavedFilter(formData: FormData) {
+    "use server";
+    const id = String(formData.get("id") ?? "");
+    if (!id) return;
+    await deleteTicketFilter(id);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -96,6 +161,16 @@ export default async function TicketsPage({
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-[6px] block text-xs font-medium text-fg-muted">Search</label>
+          <input
+            type="text"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Title or description…"
+            className="w-56 rounded-lg border border-border-strong bg-surface px-3 py-[7px] text-[13.5px] text-fg"
+          />
+        </div>
         <div>
           <label className="mb-[6px] block text-xs font-medium text-fg-muted">Status</label>
           <select
@@ -136,7 +211,53 @@ export default async function TicketsPage({
         </Link>
       </form>
 
-      <TicketsTable rows={rows} bulkUpdate={bulkUpdateTickets} clientLabel={labels.client} />
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className="font-medium text-fg-muted">Saved views:</span>
+        {savedFilters.length === 0 ? (
+          <span className="text-fg-subtle">None yet</span>
+        ) : (
+          savedFilters.map((filter) => (
+            <div
+              key={filter.id}
+              className="inline-flex items-center gap-1 rounded-full border border-border-strong bg-surface px-2.5 py-1"
+            >
+              <Link href={savedFilterHref(filter.query)} className="text-fg hover:text-accent">
+                {filter.name}
+              </Link>
+              <form action={deleteSavedFilter}>
+                <input type="hidden" name="id" value={filter.id} />
+                <button
+                  type="submit"
+                  aria-label={`Delete saved view ${filter.name}`}
+                  className="text-fg-subtle hover:text-red"
+                >
+                  ×
+                </button>
+              </form>
+            </div>
+          ))
+        )}
+        <form action={saveCurrentFilter} className="flex items-center gap-1.5">
+          <input
+            type="text"
+            name="name"
+            placeholder="Save current filter as…"
+            required
+            className="rounded-lg border border-border-strong bg-surface px-2.5 py-1 text-[13px] text-fg"
+          />
+          <Button type="submit" variant="secondary" size="sm">
+            Save
+          </Button>
+        </form>
+      </div>
+
+      <TicketsTable
+        rows={rows}
+        bulkUpdate={bulkUpdateTickets}
+        bulkAssign={bulkAssignTickets}
+        assignableUsers={assignableUsers.map((u) => ({ id: u.id, name: u.name }))}
+        clientLabel={labels.client}
+      />
     </div>
   );
 }

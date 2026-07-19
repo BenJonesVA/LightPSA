@@ -19,6 +19,8 @@ const STATUS_OPTIONS: TicketStatus[] = [
 
 const PRIORITY_OPTIONS: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "EMERGENCY"];
 
+const UNASSIGNED_VALUE = "__unassigned__";
+
 export type TicketRow = {
   id: number;
   title: string;
@@ -41,14 +43,19 @@ const SLA_TONE_CLASS: Record<TicketRow["sla"]["tone"], string> = {
 export function TicketsTable({
   rows,
   bulkUpdate,
+  bulkAssign,
+  assignableUsers = [],
   clientLabel = "Client",
 }: {
   rows: TicketRow[];
   bulkUpdate: (ticketIds: number[], formData: FormData) => Promise<void>;
+  bulkAssign?: (ticketIds: number[], assigneeId: string | null) => Promise<void>;
+  assignableUsers?: { id: string; name: string }[];
   clientLabel?: string;
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState(false);
+  const [assignPending, setAssignPending] = useState(false);
   const [hoverPreview, setHoverPreview] = useState<{
     row: TicketRow;
     top: number;
@@ -119,6 +126,21 @@ export function TicketsTable({
     }
   }
 
+  async function handleBulkAssign(event: React.ChangeEvent<HTMLSelectElement>) {
+    if (!bulkAssign) return;
+    const value = event.target.value;
+    if (!value) return; // placeholder option — no selection made yet
+    const assigneeId = value === UNASSIGNED_VALUE ? null : value;
+    setAssignPending(true);
+    try {
+      await bulkAssign(Array.from(selected), assigneeId);
+      setSelected(new Set());
+      event.target.value = "";
+    } finally {
+      setAssignPending(false);
+    }
+  }
+
   return (
     <>
     <Card className="overflow-x-auto">
@@ -158,12 +180,32 @@ export function TicketsTable({
               ))}
             </select>
           </div>
+          {bulkAssign && (
+            <div>
+              <label className="mb-[4px] block text-[10.5px] font-medium text-fg-subtle">Assign to…</label>
+              <select
+                defaultValue=""
+                disabled={assignPending}
+                onChange={handleBulkAssign}
+                className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-[13px] text-fg"
+              >
+                <option value="">Choose assignee…</option>
+                <option value={UNASSIGNED_VALUE}>Unassigned</option>
+                {assignableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <Button type="submit" variant="primary" size="sm" disabled={pending}>
             {pending ? "Applying…" : "Apply"}
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
             Clear selection
           </Button>
+          {assignPending && <span className="text-[12px] text-fg-subtle">Assigning…</span>}
         </form>
       )}
 
