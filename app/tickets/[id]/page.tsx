@@ -14,9 +14,16 @@ import {
   linkAsset,
   unlinkAsset,
   uploadAttachment,
+  deleteAttachment,
   startTimer,
   stopTimer,
   toggleExpensesEnabled,
+  linkKbArticle,
+  unlinkKbArticle,
+  watchTicket,
+  unwatchTicket,
+  linkTicket,
+  unlinkTicket,
 } from "../actions";
 import { MAX_ATTACHMENT_MB } from "@/lib/storage";
 import { getSlaStatus } from "@/lib/sla";
@@ -82,12 +89,25 @@ export default async function TicketDetailPage({
         include: { uploadedByUser: { select: { name: true } }, uploadedByContact: { select: { firstName: true, lastName: true } } },
         orderBy: { createdAt: "desc" },
       },
+      kbArticleLinks: {
+        include: { kbArticle: { select: { id: true, title: true, isInternal: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      watchers: { include: { user: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+      linksFrom: {
+        include: { linkedTicket: { select: { id: true, title: true, status: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      linksTo: {
+        include: { ticket: { select: { id: true, title: true, status: true } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
   if (!ticket) notFound();
 
-  const [slaPolicy, cannedResponses, clientAssets, assignableUsers] = await Promise.all([
+  const [slaPolicy, cannedResponses, clientAssets, candidateKbArticles, boardMembers, auditLogs] = await Promise.all([
     prisma.slaPolicy.findUnique({ where: { priority: ticket.priority } }),
     prisma.cannedResponse.findMany({
       where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
@@ -98,11 +118,41 @@ export default async function TicketDetailPage({
       include: { category: true },
       orderBy: { name: "asc" },
     }),
-    prisma.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    // Same scoping as canned responses: board-specific articles plus
+    // org-wide ones (boardId null).
+    prisma.kbArticle.findMany({
+      where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
+      select: { id: true, title: true, isInternal: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.boardMember.findMany({ where: { boardId: ticket.boardId }, select: { userId: true } }),
+    prisma.ticketAuditLog.findMany({
+      where: { ticketId },
+      include: { actor: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
   ]);
+
+  // Board-scoped assignee list: if the board has configured members, narrow
+  // to those plus ADMIN/MANAGER (role-bypass, same as requirePermission
+  // elsewhere) — an unconfigured board (zero BoardMember rows) still shows
+  // every active user so its tickets don't become unassignable.
+  const assignableUsers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      ...(boardMembers.length > 0
+        ? { OR: [{ id: { in: boardMembers.map((m) => m.userId) } }, { role: { in: ["ADMIN", "MANAGER"] } }] }
+        : {}),
+    },
+    orderBy: { name: "asc" },
+  });
 
   const linkedAssetIds = new Set(ticket.ticketAssets.map((ta) => ta.assetId));
   const linkableAssets = clientAssets.filter((asset) => !linkedAssetIds.has(asset.id));
+  const linkedKbArticleIds = new Set(ticket.kbArticleLinks.map((link) => link.kbArticleId));
+  const linkableKbArticles = candidateKbArticles.filter((article) => !linkedKbArticleIds.has(article.id));
+  const isWatching = ticket.watchers.some((w) => w.userId === user.id);
   const openTimer = ticket.timeLogs.find((log) => log.userId === user.id && log.endTime === null);
   const showExpenses = ticket.expensesEnabled || ticket.expenses.length > 0;
 
@@ -180,6 +230,26 @@ export default async function TicketDetailPage({
     return uploadAttachment(ticketId, formData);
   }
 
+  async function submitLinkKbArticle(formData: FormData) {
+    "use server";
+    await linkKbArticle(ticketId, formData);
+  }
+
+  async function submitWatch() {
+    "use server";
+    await watchTicket(ticketId);
+  }
+
+  async function submitUnwatch() {
+    "use server";
+    await unwatchTicket(ticketId);
+  }
+
+  async function submitLinkTicket(formData: FormData) {
+    "use server";
+    await linkTicket(ticketId, formData);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <AutoRefresh />
@@ -198,6 +268,11 @@ export default async function TicketDetailPage({
             <span className="text-xs text-fg-subtle">Source: {ticket.source}</span>
           </div>
         </div>
+        <form action={isWatching ? submitUnwatch : submitWatch}>
+          <Button type="submit" variant="secondary" size="sm">
+            {isWatching ? "Unwatch" : "Watch"}
+          </Button>
+        </form>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_296px] lg:items-start">
@@ -481,6 +556,12 @@ export default async function TicketDetailPage({
                   {isOverdue ? " — overdue" : ""}
                 </div>
               </div>
+              <div>
+                <div className="mb-1 font-medium text-fg-muted">Watching</div>
+                <div className="font-medium text-fg">
+                  {ticket.watchers.length > 0 ? ticket.watchers.map((w) => w.user.name).join(", ") : "—"}
+                </div>
+              </div>
             </div>
 
             <form action={changeStatus} className="mt-4 flex items-end gap-2 border-t border-border pt-4">
@@ -620,6 +701,59 @@ export default async function TicketDetailPage({
 
           <Card className="p-[18px]">
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Linked articles
+            </div>
+            {ticket.kbArticleLinks.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No articles linked yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {ticket.kbArticleLinks.map((link) => (
+                  <li key={link.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/kb/${link.kbArticle.id}`}
+                        className="truncate font-medium text-accent hover:underline"
+                      >
+                        {link.kbArticle.title}
+                      </Link>
+                      {link.kbArticle.isInternal ? (
+                        <div className="text-[11px] text-fg-subtle">Internal only</div>
+                      ) : null}
+                    </div>
+                    <form action={unlinkKbArticle.bind(null, ticketId, link.kbArticleId)}>
+                      <Button type="submit" variant="ghost" size="sm">
+                        Unlink
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {linkableKbArticles.length > 0 && (
+              <form action={submitLinkKbArticle} className="mt-3 flex items-end gap-2 border-t border-border pt-3">
+                <select
+                  name="kbArticleId"
+                  required
+                  className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                >
+                  <option value="">Link an article…</option>
+                  {linkableKbArticles.map((article) => (
+                    <option key={article.id} value={article.id}>
+                      {article.title}
+                      {article.isInternal ? " (internal)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" variant="secondary" size="sm">
+                  Link
+                </Button>
+              </form>
+            )}
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
               Attachments
             </div>
             {ticket.attachments.length === 0 ? (
@@ -646,6 +780,11 @@ export default async function TicketDetailPage({
                           {att.isInternal ? " · internal only" : ""}
                         </div>
                       </div>
+                      <form action={deleteAttachment.bind(null, ticketId, att.id)}>
+                        <Button type="submit" variant="ghost" size="sm">
+                          Delete
+                        </Button>
+                      </form>
                     </li>
                   );
                 })}
@@ -673,6 +812,109 @@ export default async function TicketDetailPage({
               </div>
               <p className="text-[10.5px] text-fg-subtle">Max {MAX_ATTACHMENT_MB}MB.</p>
             </ActionForm>
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Linked tickets
+            </div>
+            {ticket.linksFrom.length === 0 && ticket.linksTo.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No linked tickets.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {ticket.linksFrom.map((link) => (
+                  <li key={link.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/tickets/${link.linkedTicket.id}`}
+                        className="truncate font-medium text-accent hover:underline"
+                      >
+                        TKT-{link.linkedTicket.id} · {link.linkedTicket.title}
+                      </Link>
+                      <div className="text-[11px] text-fg-subtle">
+                        {link.type} · {link.linkedTicket.status.replace(/_/g, " ")}
+                      </div>
+                    </div>
+                    <form action={unlinkTicket.bind(null, ticketId, link.id)}>
+                      <Button type="submit" variant="ghost" size="sm">
+                        Unlink
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+                {ticket.linksTo.map((link) => (
+                  <li key={link.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/tickets/${link.ticket.id}`}
+                        className="truncate font-medium text-accent hover:underline"
+                      >
+                        TKT-{link.ticket.id} · {link.ticket.title}
+                      </Link>
+                      <div className="text-[11px] text-fg-subtle">
+                        {link.type} · {link.ticket.status.replace(/_/g, " ")}
+                      </div>
+                    </div>
+                    <form action={unlinkTicket.bind(null, ticketId, link.id)}>
+                      <Button type="submit" variant="ghost" size="sm">
+                        Unlink
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form action={submitLinkTicket} className="mt-3 flex items-end gap-2 border-t border-border pt-3">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-fg-muted">Ticket #</label>
+                <input
+                  type="number"
+                  name="linkedTicketId"
+                  min={1}
+                  required
+                  className="mt-1 w-full rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-fg-muted">Type</label>
+                <select
+                  name="type"
+                  defaultValue="RELATED"
+                  className="mt-1 w-full rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
+                >
+                  <option value="RELATED">Related</option>
+                  <option value="DUPLICATE">Duplicate</option>
+                </select>
+              </div>
+              <Button type="submit" variant="secondary" size="sm">
+                Link
+              </Button>
+            </form>
+          </Card>
+
+          <Card className="p-[18px]">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              History
+            </div>
+            {auditLogs.length === 0 ? (
+              <p className="text-[12.5px] text-fg-subtle">No changes recorded yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2.5 text-[12.5px]">
+                {auditLogs.map((log) => (
+                  <li key={log.id}>
+                    <div className="text-fg-muted">
+                      <span className="font-medium text-fg">{log.field}</span> changed from{" "}
+                      <span className="font-medium text-fg">{log.oldValue ?? "—"}</span> to{" "}
+                      <span className="font-medium text-fg">{log.newValue ?? "—"}</span>
+                    </div>
+                    <div className="text-[11px] text-fg-subtle">
+                      {log.actor?.name ?? "System"} · {log.createdAt.toLocaleString()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card className="p-[18px]">

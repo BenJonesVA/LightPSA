@@ -4,10 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { TicketPriority, TicketStatus, WorkType, ExpenseType } from "@prisma/client";
+import type { TicketPriority, TicketStatus, TicketLinkType, WorkType, ExpenseType } from "@prisma/client";
 import { runAutomationRules, isPriorityEscalation } from "@/lib/automation";
 import { triggerCsatSurvey } from "@/lib/csat";
-import { saveAttachmentFile, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB } from "@/lib/storage";
+import {
+  saveAttachmentFile,
+  deleteAttachmentFile,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENT_MB,
+} from "@/lib/storage";
 import {
   parseFieldSchema,
   extractCustomFieldsFromFormData,
@@ -145,6 +150,16 @@ export async function updateTicketStatus(ticketId: number, status: string) {
         authorUserId: user.id,
       },
     });
+
+    await prisma.ticketAuditLog.create({
+      data: {
+        ticketId,
+        actorId: user.id,
+        field: "status",
+        oldValue: current.status,
+        newValue: newStatus,
+      },
+    });
   }
 
   revalidatePath(`/tickets/${ticketId}`);
@@ -181,6 +196,16 @@ export async function updateTicketPriority(ticketId: number, formData: FormData)
         authorUserId: user.id,
       },
     });
+
+    await prisma.ticketAuditLog.create({
+      data: {
+        ticketId,
+        actorId: user.id,
+        field: "priority",
+        oldValue: current.priority,
+        newValue: newPriority,
+      },
+    });
   }
 
   revalidatePath(`/tickets/${ticketId}`);
@@ -197,9 +222,14 @@ export async function assignTicket(ticketId: number, formData: FormData) {
   if (!current) return;
   if (assigneeId === current.assigneeId) return;
 
-  const assignee = assigneeId
-    ? await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } })
-    : null;
+  const [oldAssignee, assignee] = await Promise.all([
+    current.assigneeId
+      ? prisma.user.findUnique({ where: { id: current.assigneeId }, select: { name: true } })
+      : null,
+    assigneeId
+      ? prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } })
+      : null,
+  ]);
 
   await prisma.ticket.update({ where: { id: ticketId }, data: { assigneeId } });
 
@@ -209,6 +239,16 @@ export async function assignTicket(ticketId: number, formData: FormData) {
       body: assignee ? `Assigned to ${assignee.name} by ${user.name}.` : `Unassigned by ${user.name}.`,
       isInternal: true,
       authorUserId: user.id,
+    },
+  });
+
+  await prisma.ticketAuditLog.create({
+    data: {
+      ticketId,
+      actorId: user.id,
+      field: "assignee",
+      oldValue: oldAssignee?.name ?? "Unassigned",
+      newValue: assignee?.name ?? "Unassigned",
     },
   });
 
@@ -247,6 +287,22 @@ export async function bulkUpdateTickets(ticketIds: number[], formData: FormData)
       priorityFormData.set("priority", priority);
       await updateTicketPriority(ticketId, priorityFormData);
     }
+  }
+
+  revalidatePath("/tickets");
+}
+
+// Exact name/signature depended on by a concurrently-developed bulk-actions
+// UI on the tickets list — loops assignTicket per id the same way
+// bulkUpdateTickets loops updateTicketStatus/updateTicketPriority, so the
+// audit-log/comment writes assignTicket already makes stay correct here too.
+export async function bulkAssignTickets(ticketIds: number[], assigneeId: string | null): Promise<void> {
+  await requireStaff();
+
+  for (const ticketId of ticketIds) {
+    const formData = new FormData();
+    formData.set("assigneeId", assigneeId ?? "");
+    await assignTicket(ticketId, formData);
   }
 
   revalidatePath("/tickets");
@@ -407,6 +463,97 @@ export async function unlinkAsset(ticketId: number, assetId: string) {
   await requireStaff();
 
   await prisma.ticketAsset.deleteMany({ where: { ticketId, assetId } });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function linkKbArticle(ticketId: number, formData: FormData) {
+  await requireStaff();
+
+  const kbArticleId = String(formData.get("kbArticleId") ?? "");
+  if (!kbArticleId) return;
+
+  // upsert, not create — same reasoning as linkAsset: resubmitting an
+  // already-linked article is a no-op rather than a unique-constraint error.
+  await prisma.ticketKbArticle.upsert({
+    where: { ticketId_kbArticleId: { ticketId, kbArticleId } },
+    update: {},
+    create: { ticketId, kbArticleId },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function unlinkKbArticle(ticketId: number, kbArticleId: string) {
+  await requireStaff();
+
+  await prisma.ticketKbArticle.deleteMany({ where: { ticketId, kbArticleId } });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function watchTicket(ticketId: number) {
+  const user = await requireStaff();
+
+  await prisma.ticketWatcher.upsert({
+    where: { ticketId_userId: { ticketId, userId: user.id } },
+    update: {},
+    create: { ticketId, userId: user.id },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function unwatchTicket(ticketId: number) {
+  const user = await requireStaff();
+
+  await prisma.ticketWatcher.deleteMany({ where: { ticketId, userId: user.id } });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function linkTicket(ticketId: number, formData: FormData) {
+  await requireStaff();
+
+  const linkedTicketId = Number(formData.get("linkedTicketId"));
+  const type = String(formData.get("type") ?? "RELATED") as TicketLinkType;
+
+  if (!Number.isInteger(linkedTicketId) || linkedTicketId === ticketId) return;
+
+  const target = await prisma.ticket.findUnique({ where: { id: linkedTicketId }, select: { id: true } });
+  if (!target) return;
+
+  await prisma.ticketLink.upsert({
+    where: { ticketId_linkedTicketId: { ticketId, linkedTicketId } },
+    update: { type },
+    create: { ticketId, linkedTicketId, type },
+  });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function unlinkTicket(ticketId: number, linkId: string) {
+  await requireStaff();
+
+  // Scoped by ticketId as well as id — same "can only touch this ticket's
+  // own rows" shape as unlinkAsset/unlinkKbArticle's deleteMany, rather than
+  // a bare delete-by-id that would let a stray id from another ticket through.
+  await prisma.ticketLink.deleteMany({ where: { id: linkId, ticketId } });
+
+  revalidatePath(`/tickets/${ticketId}`);
+}
+
+export async function deleteAttachment(ticketId: number, attachmentId: string) {
+  await requireStaff();
+
+  const attachment = await prisma.attachment.findUnique({
+    where: { id: attachmentId },
+    select: { ticketId: true },
+  });
+  if (!attachment || attachment.ticketId !== ticketId) return;
+
+  await prisma.attachment.delete({ where: { id: attachmentId } });
+  await deleteAttachmentFile(attachmentId);
 
   revalidatePath(`/tickets/${ticketId}`);
 }

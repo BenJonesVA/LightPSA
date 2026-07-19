@@ -39,7 +39,7 @@ export default async function AssetDetailPage({
   const [ticketAssets, categories, clients] = await Promise.all([
     prisma.ticketAsset.findMany({
       where: { assetId: id },
-      include: { ticket: { select: { id: true, title: true, status: true, priority: true } } },
+      include: { ticket: { include: { board: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
@@ -183,10 +183,11 @@ export default async function AssetDetailPage({
                   TKT-{ticket.id}
                 </Link>{" "}
                 <span className="text-fg-muted">{ticket.title}</span>
+                <div className="text-xs text-fg-subtle">{ticket.board.name}</div>
               </div>
               <div className="flex items-center gap-4">
-                <PriorityBadge priority={ticket.priority} />
                 <StatusBadge status={ticket.status} />
+                <PriorityBadge priority={ticket.priority} />
               </div>
             </li>
           ))}

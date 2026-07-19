@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 
 // Local-disk storage — your call over S3/R2 for this deployment. Files are
@@ -21,6 +21,16 @@ export async function saveAttachmentFile(id: string, data: Buffer): Promise<void
 
 export async function readAttachmentFile(id: string): Promise<Buffer> {
   return readFile(path.join(UPLOAD_DIR, id));
+}
+
+// Best-effort — if the file's already gone (or was never written), that's
+// not an error worth surfacing to the caller deleting the Attachment row.
+export async function deleteAttachmentFile(id: string): Promise<void> {
+  try {
+    await unlink(path.join(UPLOAD_DIR, id));
+  } catch {
+    // nothing to clean up
+  }
 }
 
 // Org logo — a single fixed-name file (there's only ever one), served
