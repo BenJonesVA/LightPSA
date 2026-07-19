@@ -81,6 +81,12 @@ const SECTIONS: Section[] = [
     permission: Permission.MANAGE_SLA,
   },
   {
+    href: "/admin/api-keys",
+    label: "API Keys",
+    description: "Machine credentials for monitoring/RMM integrations to create tickets via the API.",
+    roles: [UserRole.ADMIN],
+  },
+  {
     href: "/automation",
     label: "Automation",
     description: "IFTTT-style rules that react to ticket events.",
