@@ -143,6 +143,13 @@ export function MarkdownEditor({
             >
               Link
             </button>
+            <button
+              type="button"
+              className={toolbarButtonClass()}
+              onClick={() => withTextarea((el) => wrapSelection(el, "![", "](url)", "alt text", setValue))}
+            >
+              Insert image
+            </button>
           </>
         )}
         <span className="ml-auto text-[11px] text-fg-subtle">Markdown supported</span>

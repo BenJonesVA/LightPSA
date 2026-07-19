@@ -17,8 +17,22 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 // link). Because every render path (staff views, portal views, and the
 // editor's own Preview tab) goes through this one component, there's a
 // single place this can drift, not several.
+//
+// `img` `src` is further restricted to same-origin `/api/attachments/...`
+// URLs (regex match, not just a protocol check — relative URLs have no
+// protocol and would otherwise sail through the `protocols` allowlist
+// below unchecked). This app has a client portal, so an unrestricted
+// `![](https://attacker.example/pixel.gif)` would let anyone embed a
+// tracking pixel / SSRF probe in a ticket or KB article simply by typing
+// markdown. Images pointing anywhere else are dropped (the `src` attribute
+// is stripped, leaving an inert `<img>` with no network request), rather
+// than allowed through.
 const schema = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    img: [["src", /^\/api\/attachments\//], "alt"],
+  },
   protocols: {
     ...defaultSchema.protocols,
     href: ["http", "https", "mailto"],
