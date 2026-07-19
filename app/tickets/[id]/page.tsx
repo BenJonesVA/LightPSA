@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/rbac";
-import type { TicketPriority, TicketStatus } from "@prisma/client";
+import type { Prisma, TicketPriority, TicketStatus } from "@prisma/client";
 import {
   addComment,
   updateTicketStatus,
@@ -107,7 +107,7 @@ export default async function TicketDetailPage({
 
   if (!ticket) notFound();
 
-  const [slaPolicy, cannedResponses, clientAssets, candidateKbArticles, boardMembers, auditLogs] = await Promise.all([
+  const [slaPolicy, cannedResponses, clientAssets, candidateKbArticles, boardMembers, clientMembers, auditLogs] = await Promise.all([
     resolveSlaPolicy(ticket.clientId, ticket.priority),
     prisma.cannedResponse.findMany({
       where: { OR: [{ boardId: null }, { boardId: ticket.boardId }] },
@@ -126,6 +126,7 @@ export default async function TicketDetailPage({
       orderBy: { title: "asc" },
     }),
     prisma.boardMember.findMany({ where: { boardId: ticket.boardId }, select: { userId: true } }),
+    prisma.clientMember.findMany({ where: { clientId: ticket.clientId }, select: { userId: true } }),
     prisma.ticketAuditLog.findMany({
       where: { ticketId },
       include: { actor: { select: { name: true } } },
@@ -134,17 +135,23 @@ export default async function TicketDetailPage({
     }),
   ]);
 
-  // Board-scoped assignee list: if the board has configured members, narrow
-  // to those plus ADMIN/MANAGER (role-bypass, same as requirePermission
-  // elsewhere) — an unconfigured board (zero BoardMember rows) still shows
-  // every active user so its tickets don't become unassignable.
+  // Board-scoped and client/department-scoped assignee list: each dimension
+  // that has configured members narrows to (those members OR ADMIN/MANAGER,
+  // same role-bypass as requirePermission elsewhere); a dimension with zero
+  // configured members (e.g. an unconfigured board, or a client nobody's
+  // been scoped to) imposes no restriction of its own, so a ticket never
+  // becomes unassignable just because one dimension isn't set up yet. Both
+  // configured dimensions AND together.
+  const roleBypass: Prisma.UserWhereInput = { role: { in: ["ADMIN", "MANAGER"] } };
+  const assignabilityFilters: Prisma.UserWhereInput[] = [];
+  if (boardMembers.length > 0) {
+    assignabilityFilters.push({ OR: [{ id: { in: boardMembers.map((m) => m.userId) } }, roleBypass] });
+  }
+  if (clientMembers.length > 0) {
+    assignabilityFilters.push({ OR: [{ id: { in: clientMembers.map((m) => m.userId) } }, roleBypass] });
+  }
   const assignableUsers = await prisma.user.findMany({
-    where: {
-      isActive: true,
-      ...(boardMembers.length > 0
-        ? { OR: [{ id: { in: boardMembers.map((m) => m.userId) } }, { role: { in: ["ADMIN", "MANAGER"] } }] }
-        : {}),
-    },
+    where: { isActive: true, AND: assignabilityFilters },
     orderBy: { name: "asc" },
   });
 

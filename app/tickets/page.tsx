@@ -62,20 +62,29 @@ export default async function TicketsPage({
       : {}),
   };
 
-  // Board-scoped RBAC: ADMIN/MANAGER see everything. Other roles are
-  // restricted to boards they're a member of — unless they have zero
-  // memberships configured, in which case restricting would silently show
-  // an empty list, so we fall back to showing everything instead.
+  // Board-scoped and client/department-scoped RBAC: ADMIN/MANAGER see
+  // everything. Other roles are restricted to boards and clients they're a
+  // member of — unless they have zero memberships configured for a given
+  // dimension, in which case restricting on it would silently show an empty
+  // list, so that dimension falls back to unrestricted instead. The two
+  // dimensions AND together: a tech with both board and client memberships
+  // configured only sees tickets matching both.
   if (user.role !== "ADMIN" && user.role !== "MANAGER") {
-    const memberships = await prisma.boardMember.findMany({
-      where: { userId: user.id },
-      select: { boardId: true },
-    });
-    if (memberships.length > 0) {
-      const allowedBoardIds = memberships.map((m) => m.boardId);
+    const [boardMemberships, clientMemberships] = await Promise.all([
+      prisma.boardMember.findMany({ where: { userId: user.id }, select: { boardId: true } }),
+      prisma.clientMember.findMany({ where: { userId: user.id }, select: { clientId: true } }),
+    ]);
+    const andClauses: Prisma.TicketWhereInput[] = [];
+    if (boardMemberships.length > 0) {
+      andClauses.push({ boardId: { in: boardMemberships.map((m) => m.boardId) } });
+    }
+    if (clientMemberships.length > 0) {
+      andClauses.push({ clientId: { in: clientMemberships.map((m) => m.clientId) } });
+    }
+    if (andClauses.length > 0) {
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-        { boardId: { in: allowedBoardIds } },
+        ...andClauses,
       ];
     }
   }

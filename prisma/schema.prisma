@@ -164,6 +164,7 @@ model User {
   updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
   boardMemberships      BoardMember[]
+  clientMemberships     ClientMember[]
   assignedTickets       Ticket[]              @relation("TicketAssignee")
   comments              TicketComment[]       @relation("CommentAuthorUser")
   timeLogs              TimeLog[]
@@ -204,8 +205,26 @@ model Client {
   automationConditions AutomationRule[]  @relation("AutomationConditionClient")
   slaPolicies          ClientSlaPolicy[]
   invoices             Invoice[]
+  members              ClientMember[]
 
   @@index([parentId])
+}
+
+// Same RBAC-scoping shape as BoardMember, one dimension over: which
+// technicians can see/work a given client's tickets. In ENTERPRISE org mode
+// (lib/settings.ts) Client is relabeled "Department" and Contact "Employee"
+// — this is what lets an HR department's staff be scoped away from IT's
+// tickets and vice versa — but the model works identically, and is just as
+// useful in MSP mode to scope a tech to only their assigned customers.
+model ClientMember {
+  id       String @id @default(cuid())
+  clientId String
+  userId   String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, userId])
+  @@index([userId])
 }
 
 model Contact {

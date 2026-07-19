@@ -192,3 +192,30 @@ export async function setUserPermissionGroups(userId: string, _prevState: FormAc
   revalidatePath(`/admin/users/${userId}`);
   return null;
 }
+
+// Replaces the user's full client/department membership set (app/tickets/
+// page.tsx's list query and app/tickets/[id]/page.tsx's assignee picker both
+// read ClientMember for RBAC scoping) — same full-replace-on-submit approach
+// as setUserPermissionGroups, and the same MANAGE_USERS gate as the rest of
+// this file (not the stricter ADMIN-only requireRole used for permission
+// groups — client/department scoping only ever narrows what a user can see,
+// it can't escalate privilege the way a permission group grant can).
+export async function setUserClientMemberships(userId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+  await requirePermission(Permission.MANAGE_USERS, UserRole.ADMIN);
+
+  const clientIds = formData.getAll("clientIds").map(String);
+
+  await prisma.$transaction([
+    prisma.clientMember.deleteMany({ where: { userId } }),
+    ...(clientIds.length > 0
+      ? [
+          prisma.clientMember.createMany({
+            data: clientIds.map((clientId) => ({ userId, clientId })),
+          }),
+        ]
+      : []),
+  ]);
+
+  revalidatePath(`/admin/users/${userId}`);
+  return null;
+}

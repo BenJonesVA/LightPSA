@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { Permission, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
-import { deleteUser, updateUser, setUserPermissionGroups } from "../actions";
+import { getOrgLabels } from "@/lib/settings";
+import { deleteUser, updateUser, setUserPermissionGroups, setUserClientMemberships } from "../actions";
 import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -23,10 +24,15 @@ export default async function UserDetailPage({
   const viewerIsAdmin = viewer.role === UserRole.ADMIN;
 
   const { id } = await params;
+  const labels = await getOrgLabels();
 
-  const [user, allGroups] = await Promise.all([
-    prisma.user.findUnique({ where: { id }, include: { permissionGroups: { select: { groupId: true } } } }),
+  const [user, allGroups, allClients] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id },
+      include: { permissionGroups: { select: { groupId: true } }, clientMemberships: { select: { clientId: true } } },
+    }),
     viewerIsAdmin ? prisma.permissionGroup.findMany({ orderBy: { name: "asc" } }) : Promise.resolve([]),
+    prisma.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
   if (!user) {
@@ -34,9 +40,11 @@ export default async function UserDetailPage({
   }
 
   const memberGroupIds = new Set(user.permissionGroups.map((m) => m.groupId));
+  const memberClientIds = new Set(user.clientMemberships.map((m) => m.clientId));
   const updateUserForId = updateUser.bind(null, user.id);
   const deleteUserForId = deleteUser.bind(null, user.id);
   const setGroupsForUser = setUserPermissionGroups.bind(null, user.id);
+  const setClientsForUser = setUserClientMemberships.bind(null, user.id);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -159,6 +167,43 @@ export default async function UserDetailPage({
           )}
         </Card>
       )}
+
+      <Card className="mt-6">
+        <CardHeader>
+          <h2 className="text-[13.5px] font-semibold text-fg">{labels.clients}</h2>
+        </CardHeader>
+        <p className="border-b border-border px-5 py-3 text-xs text-fg-subtle">
+          Restricts which {labels.clients.toLowerCase()}&apos; tickets this user can see and be assigned —
+          leave unchecked entirely to leave this user unrestricted (sees every {labels.client.toLowerCase()}).
+        </p>
+        {allClients.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-fg-muted">
+            No {labels.clients.toLowerCase()} exist yet.
+          </p>
+        ) : (
+          <ActionForm action={setClientsForUser} className="flex flex-col gap-3 p-5">
+            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+              {allClients.map((client) => (
+                <label key={client.id} className="flex items-center gap-2.5 text-sm text-fg-muted">
+                  <input
+                    type="checkbox"
+                    name="clientIds"
+                    value={client.id}
+                    defaultChecked={memberClientIds.has(client.id)}
+                    className="rounded border-border-strong accent-accent"
+                  />
+                  {client.name}
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" size="sm">
+                Save {labels.clients.toLowerCase()}
+              </Button>
+            </div>
+          </ActionForm>
+        )}
+      </Card>
 
       <div className="mt-6 flex justify-end">
         <DeleteButton action={deleteUserForId} label="Delete user" />
