@@ -2,6 +2,55 @@
 
 A PSA / Ticketing System for MSPs — tickets, boards, clients & contacts, contracts/billing, SLA policies, automation rules, a knowledge base, asset tracking, dispatch scheduling, CSAT surveys, and reporting. See [`plan.md`](./plan.md) for the full build history and architecture notes.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/01-dashboard.png" alt="Dashboard"><br><sub><b>Dashboard</b> — open tickets, SLA breaches, ticket volume, and upcoming visits at a glance</sub></td>
+<td width="50%"><img src="docs/screenshots/02-tickets.png" alt="Tickets list"><br><sub><b>Tickets</b> — filterable queue across all boards and clients</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/03-ticket-detail.png" alt="Ticket detail"><br><sub><b>Ticket detail</b> — time logs, comments, canned responses, SLA countdown, and properties</sub></td>
+<td width="50%"><img src="docs/screenshots/11-billing.png" alt="Billing review queue"><br><sub><b>Billing</b> — approve and lock billable time/expenses before invoicing</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/09-schedule.png" alt="Schedule"><br><sub><b>Schedule</b> — dispatch technicians to on-site visits by week/month/day</sub></td>
+<td width="50%"><img src="docs/screenshots/16-portal-dashboard.png" alt="Client portal"><br><sub><b>Client portal</b> — contacts see only their own company's tickets and public KB articles</sub></td>
+</tr>
+</table>
+
+<details>
+<summary>More screenshots (boards, clients, assets, KB, SLA policies, automation, reports, admin)</summary>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/04-boards.png" alt="Boards"><br><sub><b>Boards</b> — organize tickets into queues (help desk, support, physical install, ...)</sub></td>
+<td width="50%"><img src="docs/screenshots/05-board-detail.png" alt="Board-filtered tickets"><br><sub><b>Board view</b> — tickets filtered to a single board</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/06-clients.png" alt="Clients"><br><sub><b>Clients</b> — companies, including parent/child accounts</sub></td>
+<td width="50%"><img src="docs/screenshots/07-client-detail.png" alt="Client detail"><br><sub><b>Client detail</b> — contacts, portal access, and contracts</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/10-assets.png" alt="Assets"><br><sub><b>Assets</b> — servers, network devices, and workstations tracked per client</sub></td>
+<td width="50%"><img src="docs/screenshots/08-knowledge-base.png" alt="Knowledge base"><br><sub><b>Knowledge base</b> — internal and client-facing articles by board/category</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/12-sla-policies.png" alt="SLA policies"><br><sub><b>SLA policies</b> — response/resolution targets per priority</sub></td>
+<td width="50%"><img src="docs/screenshots/13-automation.png" alt="Automation rules"><br><sub><b>Automation rules</b> — IFTTT-style triggers, conditions, and actions</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/14-reports.png" alt="Reports"><br><sub><b>Reports</b> — ticket volume, SLA compliance, and technician utilization</sub></td>
+<td width="50%"><img src="docs/screenshots/15-admin-hub.png" alt="Admin hub"><br><sub><b>Admin</b> — branding, categories, users, permission groups, and more</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/17-portal-tickets.png" alt="Portal tickets"><br><sub><b>Portal — My Tickets</b></sub></td>
+<td width="50%"><img src="docs/screenshots/18-portal-kb.png" alt="Portal knowledge base"><br><sub><b>Portal — Knowledge Base</b></sub></td>
+</tr>
+</table>
+
+</details>
+
 ## Quick start
 
 ```bash
