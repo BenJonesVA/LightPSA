@@ -1,5 +1,11 @@
 # LightPSA
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+
 A PSA / Ticketing System for MSPs — tickets, boards, clients & contacts, contracts/billing, SLA policies, automation rules, a knowledge base, asset tracking, dispatch scheduling, CSAT surveys, and reporting. See [`plan.md`](./plan.md) for the full build history and architecture notes.
 
 ## Screenshots
